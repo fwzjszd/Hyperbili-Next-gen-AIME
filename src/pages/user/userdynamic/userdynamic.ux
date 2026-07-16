@@ -1,0 +1,90 @@
+<import name="title-bar" src="@components/TitleBar/TitleBar.ux"></import>
+<import name="dyn-show" src="@components/DynShow/DynShow.ux"></import>
+
+<template>
+  <div class="page">
+    <scroll class="scroll {{scrclass}}" scroll-y="true" bounces="true">
+      <title-bar title="user.dynamices"></title-bar>
+      <div class="waterfall" if="show_content">
+        <div class="waterfall-column">
+          <dyn-show for="{{dynamics.render_split_1}}" dyn="{{$item}}"></dyn-show>
+        </div>
+        <div class="waterfall-column">
+          <dyn-show for="{{dynamics.render_split_2}}" dyn="{{$item}}"></dyn-show>
+        </div>
+      </div>
+      <text style="margin-top: 25px"></text>
+    </scroll>
+    <image style="position: absolute; margin-top: 245px" if="{{anims.show_loading}}" src="{{anims.loading_src.value}}"></image>
+  </div>
+</template>
+
+<script>
+import prompt from "@system.prompt"
+export default {
+  public: {
+    uid: 1
+  },
+  private: {
+    scrclass: "",
+    show_content: false,
+    anims: {
+      show_loading: false
+    },
+    dynamics: {
+      render_split_1: [],
+      render_split_2: []
+    }
+  },
+  SplitWaterfallArea(arr) {
+    const arr1 = [];
+    const arr2 = [];
+    arr.forEach((value, index) => {
+      if (index % 2 === 0) {
+        arr1.push(value);
+      } else {
+        arr2.push(value);
+      }
+    });
+    return { arr1, arr2 };
+  },
+  async LoadDynamics() {
+    try {
+      this.anims.loading.start();
+      var dynamics = await global.biliclient.getUserDynamicListByUID(this.uid);
+      var split_result = this.SplitWaterfallArea(dynamics.items);
+      
+      this.dynamics.render_split_1.splice(0, this.dynamics.render_split_1.length, ...split_result.arr1);
+      this.dynamics.render_split_2.splice(0, this.dynamics.render_split_2.length, ...split_result.arr2);
+      this.anims.loading.stop();
+      this.anims.show_loading = false;
+      this.show_content = true;
+    } catch (e) {
+      global.logger.error(e.toString());
+      prompt.showToast({
+        message: "加载动态失败"
+      })
+    }
+  },
+  onInit() {
+    global.animengine.defaults.loading.CreateLoadingAnimation(this);
+    this.LoadDynamics();
+  }
+}
+</script>
+
+<style lang="less">
+@import '@less/global.less';
+
+.waterfall {
+  flex-direction: row;
+  width: 100%;
+  justify-content: space-around;
+  padding-top: 10px;
+}
+
+.waterfall-column {
+  flex-direction: column;
+  align-items: center;
+}
+</style>

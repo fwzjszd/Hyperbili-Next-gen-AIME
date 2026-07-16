@@ -1,0 +1,91 @@
+∞
+entry∑
+openpage-scrollü
+	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]∑
+fromback-scrollü
+	keyframes2è[{"time":0,"transform":{"translateY":"232px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateY":"0px","scaleX":0.75,"scaleY":0.75}}]∑
+backpage-scrollü
+	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]q
+page
+	display2flex
+flexDirection2column
+
+alignItems2center
+width2100%
+height2100%˘
+scroll
+	display2flex
+flexDirection2column
+
+alignItems2center
+width2100%
+height2100%"
+animationName2openpage-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2reverseò
+scroll-backanim"
+animationName2backpage-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2normalù
+scroll-frombackanim"
+animationName2fromback-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2reverse
+text
+color2whiteÂ
+	comp-root
+flexDirection2column
+backgroundColor2	#262626b0
+borderRadius225px
+width2190px
+
+paddingTop210px
+paddingRight210px
+paddingBottom210px
+paddingLeft210px
+	marginTop210px8
+user
+
+alignItems2center
+flexDirection2row=
+
+userinfo
+
+marginLeft210px
+flexDirection2columnu
+
+userface
+borderRadius250%
+
+minWidth265px
+	minHeight265px
+
+maxWidth265px
+	maxHeight265px\
+
+username
+
+fontSize222px
+
+fontWeightÿ
+lines
+textOverflow2ellipsis&
+	content
+flexDirection2columnÅ
+dyn-content-text
+
+fontSize220px
+
+fontWeightÿ
+
+maxWidth2100%
+	maxHeight2100px
+textOverflow2ellipsisO
+dyn-article-tip
+
+fontSize216px
+color2#ff7da8
+	marginTop25px

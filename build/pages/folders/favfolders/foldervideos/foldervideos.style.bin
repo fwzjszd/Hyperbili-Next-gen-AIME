@@ -1,0 +1,122 @@
+Œ
+entry∑
+openpage-scrollü
+	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]∑
+fromback-scrollü
+	keyframes2è[{"time":0,"transform":{"translateY":"232px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateY":"0px","scaleX":0.75,"scaleY":0.75}}]∑
+backpage-scrollü
+	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]q
+page
+	display2flex
+flexDirection2column
+
+alignItems2center
+width2100%
+height2100%˘
+scroll
+	display2flex
+flexDirection2column
+
+alignItems2center
+width2100%
+height2100%"
+animationName2openpage-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2reverseò
+scroll-backanim"
+animationName2backpage-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2normalù
+scroll-frombackanim"
+animationName2fromback-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2reverse
+text
+color2whiteÖ
+foldervid_div
+	marginTop210px
+width277%
+
+alignItems2center
+justifyContent2center
+flexDirection2column4
+foldervid_list
+width277%
+height2100%¨
+foldervid_listitem
+height2170px
+width2100%
+	marginTop25px
+	display2flex
+flexDirection2column
+
+alignItems2center
+
+position2absolute¶
+foldervid_list_vid
+borderRadius250px
+backgroundColor2#262626
+height2100%
+width2100%
+justifyContent2center
+flexDirection2columnG
+	vidinfo
+flexDirection2row
+height2130px
+width2100%ä
+
+vidpicture
+
+marginLeft226px
+	marginTop220px
+
+minWidth2160px
+	minHeight2100px
+
+maxWidth2160px
+	maxHeight2100px
+borderRadius230px-
+backgroundColor2rgba(255, 255, 255, 0.2)
+justifyContent2center
+
+alignItems2centerÄ
+vidpicture_img
+
+minWidth2160px
+	minHeight2100px
+
+maxWidth2160px
+	maxHeight2100px
+borderRadius230pxå
+
+vidtitle
+
+marginLeft220px
+	marginTop220px
+
+fontSize220px
+
+fontWeightÿ
+width2145px
+textOverflow2ellipsis9
+	vidstat
+flexDirection2row
+
+marginLeft230px1
+upinfo
+
+fontSize214px
+
+fontWeightÿc
+	stat_view
+
+fontSize214px
+
+fontWeightÿ
+
+position2absolute
+
+marginLeft2250px

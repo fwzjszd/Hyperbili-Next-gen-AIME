@@ -1,0 +1,191 @@
+<import name="title-bar" src="@components/TitleBar/TitleBar.ux"></import>
+<template>
+  <div class="page">
+    <scroll class="scroll {{scrclass}}" scroll-y="true" bounces="true">
+      <title-bar title="存储空间"></title-bar>
+      <div class="storage_card">
+        <div class="storage_item">
+          <text class="storage_num">{{ totalStorageNum }}</text>
+          <text class="storage_unit">{{ totalStorageUnit }}</text>
+          <text class="storage_label">总空间</text>
+        </div>
+        <div class="storage_divider"></div>
+        <div class="storage_item">
+          <text class="storage_num">{{ usedStorageNum }}</text>
+          <text class="storage_unit">{{ usedStorageUnit }}</text>
+          <text class="storage_label">已用</text>
+        </div>
+        <div class="storage_divider"></div>
+        <div class="storage_item">
+          <text class="storage_num">{{ availableStorageNum }}</text>
+          <text class="storage_unit">{{ availableStorageUnit }}</text>
+          <text class="storage_label">可用</text>
+        </div>
+      </div>
+      <text class="cleartip" style="margin-top: 20px">存储空间信息由系统提供</text>
+      <text class="cleartip">仅供参考</text>
+      <text style="margin-top: 30px"></text>
+    </scroll>
+  </div>
+</template>
+<script>
+import file from "@system.file"
+import device from "@system.device"
+export default {
+  private: {
+    storageInfoAvailable: false,
+    totalStorage: "-- MB",
+    usedStorage: "-- MB",
+    availableStorage: "-- MB",
+    totalStorageNum: "--",
+    totalStorageUnit: "MB",
+    usedStorageNum: "--",
+    usedStorageUnit: "MB",
+    availableStorageNum: "--",
+    availableStorageUnit: "MB",
+    scrclass: ""
+  },
+  FormatStorage(bytes) {
+    const mb = bytes / (1024 * 1024)
+    if (mb >= 1024) {
+      const gb = mb / 1024
+      return {
+        num: gb.toFixed(2),
+        unit: "GB"
+      }
+    } else {
+      return {
+        num: mb.toFixed(2),
+        unit: "MB"
+      }
+    }
+  },
+  GetStorageInfo() {
+    try {
+      global.logger.log("[Storage] GetStorageInfo start")
+      
+      let totalSize = 0
+      let availableSize = 0
+      let gotTotal = false
+      let gotAvailable = false
+      
+      const updateStorageInfo = () => {
+        if (gotTotal && gotAvailable) {
+          global.logger.log("[Storage] updateStorageInfo, total: " + totalSize + ", available: " + availableSize)
+          this.storageInfoAvailable = true
+          const usedSize = totalSize - availableSize
+          
+          // 总存储空间
+          const totalFormatted = this.FormatStorage(totalSize)
+          this.totalStorageNum = totalFormatted.num
+          this.totalStorageUnit = totalFormatted.unit
+          this.totalStorage = totalFormatted.num + " " + totalFormatted.unit
+          
+          // 已用存储空间
+          const usedFormatted = this.FormatStorage(usedSize)
+          this.usedStorageNum = usedFormatted.num
+          this.usedStorageUnit = usedFormatted.unit
+          this.usedStorage = usedFormatted.num + " " + usedFormatted.unit
+          
+          // 可用存储空间
+          const availableFormatted = this.FormatStorage(availableSize)
+          this.availableStorageNum = availableFormatted.num
+          this.availableStorageUnit = availableFormatted.unit
+          this.availableStorage = availableFormatted.num + " " + availableFormatted.unit
+        }
+      }
+      
+      // 尝试使用 device 模块的 API
+      if (device && device.getTotalStorage && device.getAvailableStorage) {
+        global.logger.log("[Storage] Using device module API")
+        
+        device.getTotalStorage({
+          success: (data) => {
+            global.logger.log("[Storage] getTotalStorage success: ", JSON.stringify(data))
+            totalSize = data.totalStorage || data.totalSize || 0
+            gotTotal = true
+            updateStorageInfo()
+          },
+          fail: (data, code) => {
+            global.logger.log("[Storage] getTotalStorage fail, code = " + code + ", data = " + JSON.stringify(data))
+            // 尝试使用 file 模块作为备选
+            this.TryFileStorageAPI()
+          }
+        })
+        
+        device.getAvailableStorage({
+          success: (data) => {
+            global.logger.log("[Storage] getAvailableStorage success: ", JSON.stringify(data))
+            availableSize = data.availableStorage || data.availableSize || 0
+            gotAvailable = true
+            updateStorageInfo()
+          },
+          fail: (data, code) => {
+            global.logger.log("[Storage] getAvailableStorage fail, code = " + code + ", data = " + JSON.stringify(data))
+          }
+        })
+      } else {
+        global.logger.log("[Storage] device module API not available, trying file module")
+        // device 模块 API 不存在，尝试使用 file 模块
+        this.TryFileStorageAPI()
+      }
+    } catch (e) {
+      global.logger.log("[Storage] GetStorageInfo error: " + e.toString())
+      // 出错时保持显示 "--" 占位符
+    }
+  },
+  TryFileStorageAPI() {
+    try {
+      global.logger.log("[Storage] TryFileStorageAPI start")
+      
+      if (file && file.getStorageInfo) {
+        file.getStorageInfo({
+          success: (data) => {
+            global.logger.log("[Storage] file.getStorageInfo success: ", JSON.stringify(data))
+            const totalSize = data.totalStorage || data.totalSize || 0
+            const availableSize = data.availableStorage || data.availableSize || 0
+            
+            if (totalSize > 0) {
+              this.storageInfoAvailable = true
+              const usedSize = totalSize - availableSize
+              
+              // 总存储空间
+              const totalFormatted = this.FormatStorage(totalSize)
+              this.totalStorageNum = totalFormatted.num
+              this.totalStorageUnit = totalFormatted.unit
+              this.totalStorage = totalFormatted.num + " " + totalFormatted.unit
+              
+              // 已用存储空间
+              const usedFormatted = this.FormatStorage(usedSize)
+              this.usedStorageNum = usedFormatted.num
+              this.usedStorageUnit = usedFormatted.unit
+              this.usedStorage = usedFormatted.num + " " + usedFormatted.unit
+              
+              // 可用存储空间
+              const availableFormatted = this.FormatStorage(availableSize)
+              this.availableStorageNum = availableFormatted.num
+              this.availableStorageUnit = availableFormatted.unit
+              this.availableStorage = availableFormatted.num + " " + availableFormatted.unit
+            }
+          },
+          fail: (data, code) => {
+            global.logger.log("[Storage] file.getStorageInfo fail, code = " + code + ", data = " + JSON.stringify(data))
+            // 失败时保持显示 "--" 占位符
+          }
+        })
+      } else {
+        global.logger.log("[Storage] file.getStorageInfo not available")
+      }
+    } catch (e) {
+      global.logger.log("[Storage] TryFileStorageAPI error: " + e.toString())
+    }
+  },
+  onInit() {
+    this.GetStorageInfo()
+  }
+}
+</script>
+<style lang="less">
+@import '@less/global.less';
+@import './storage.less';
+</style>

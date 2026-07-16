@@ -1,0 +1,130 @@
+ª
+entry∑
+openpage-scrollü
+	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]∑
+fromback-scrollü
+	keyframes2è[{"time":0,"transform":{"translateY":"232px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateY":"0px","scaleX":0.75,"scaleY":0.75}}]∑
+backpage-scrollü
+	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]q
+page
+	display2flex
+flexDirection2column
+
+alignItems2center
+width2100%
+height2100%˘
+scroll
+	display2flex
+flexDirection2column
+
+alignItems2center
+width2100%
+height2100%"
+animationName2openpage-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2reverseò
+scroll-backanim"
+animationName2backpage-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2normalù
+scroll-frombackanim"
+animationName2fromback-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2reverse
+text
+color2whiteÅ
+vid
+	marginTop210px
+
+paddingTop215px
+paddingRight215px
+paddingBottom215px
+paddingLeft215px
+borderRadius225px
+backgroundColor2	#262626b0
+justifyContent2center
+
+alignItems2center
+flexDirection2column\
+	loadedbox
+justifyContent2center
+
+alignItems2center
+flexDirection2columnP
+	vidinfo
+width2100%
+justifyContent2center
+flexDirection2rowá
+
+vidpicture
+borderRadius230px+
+backgroundColor2rgba(255, 255, 255, 0)
+justifyContent2center
+
+alignItems2centerE
+vidpicture_img
+borderRadius230px
+	objectFit2
+scale-downx
+
+vidtitle
+paddingLeft220px
+width2145px
+
+fontSize220px
+
+fontWeightÿ
+textOverflow2ellipsisk
+vidtitle_column
+	marginTop210px
+
+fontSize220px
+
+fontWeightÿ
+textOverflow2ellipsis√
+	vidstat
+
+paddingTop20px
+paddingRight210px
+paddingBottom20px
+paddingLeft210px
+	marginTop25px
+flexDirection2row
+
+alignItems2
+flex-start
+
+minWidth2100%_
+upinfo
+
+fontSize214px
+
+fontWeightÿ
+width2200px
+textOverflow2ellipsisM
+	stat_view
+
+position2absolute
+right22px
+
+alignItems2centerO
+stat_view_img
+width220px
+height215px
+	objectFit2
+scale-downN
+stat_view_text
+
+fontSize214px
+
+fontWeightÿ
+
+marginLeft25px9
+compLoadingTip
+
+fontWeightÿ
+
+fontSize218px

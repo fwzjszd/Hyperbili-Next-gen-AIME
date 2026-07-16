@@ -1,0 +1,19 @@
+¤
+entryÃ
+page
+	display2flex
+flexDirection2column
+
+alignItems2center
+justifyContent2center
+height2100%
+
+position2absolute
+width2100%
+backgroundColor2#000000U
+
+splashlogo
+	display2flex
+justifyContent2center
+
+alignItems2center

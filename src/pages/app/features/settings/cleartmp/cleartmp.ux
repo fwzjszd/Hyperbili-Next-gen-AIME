@@ -1,0 +1,460 @@
+<import name="title-bar" src="@components/TitleBar/TitleBar.ux"></import>
+<import name="default-button" src="@components/DefaultButton/DefaultButton.ux"></import>
+
+<template>
+  <div class="page">
+    <scroll class="scroll {{scrclass}}" scroll-y="true" bounces="true">
+      <title-bar title="cleartmp.title"></title-bar>
+      <div class="storage_card">
+        <div class="storage_item">
+          <text class="storage_num">{{ totalStorageNum }}</text>
+          <text class="storage_unit">{{ totalStorageUnit }}</text>
+          <text class="storage_label">{{ $t("settings.totalStorage") }}</text>
+        </div>
+        <div class="storage_divider"></div>
+        <div class="storage_item">
+          <text class="storage_num">{{ usedStorageNum }}</text>
+          <text class="storage_unit">{{ usedStorageUnit }}</text>
+          <text class="storage_label">{{ $t("settings.usedStorage") }}</text>
+        </div>
+        <div class="storage_divider"></div>
+        <div class="storage_item">
+          <text class="storage_num">{{ availableStorageNum }}</text>
+          <text class="storage_unit">{{ availableStorageUnit }}</text>
+          <text class="storage_label">{{ $t("settings.availableStorage") }}</text>
+        </div>
+      </div>
+      <text class="cleartip" style="margin-top: 10px">请先选择类别</text>
+      <text class="cleartip">随后点击按钮以进行清理</text>
+      <div class="typebox" style="margin-top: 25px">
+        <text if="{{tmps.length < 1}}" style="font-weight: 600; font-size: 24px; color: #9e9e9e">
+          缓存文件扫描中...
+        </text>
+        <div style="padding: 5px; width: 77%" for="{{tmps}}">
+          <div class="tmptype" onclick="SelectHandler($item.alias)" style="background-color: {{typeColors[$item.alias]}}">
+            <text class="typetxt">{{ $item.name }}</text>
+            <text class="typesize">{{ $item.size }}</text>
+          </div>
+        </div>
+      </div>
+      <default-button @click="ClearClick" primary="true" margin-top="25px" text="cleartmp.clear"
+        disabled="{{cantClear}}"></default-button>
+      <text style="margin-top: 30px"></text>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import prompt from "@system.prompt"
+import file from "@system.file"
+import device from "@system.device"
+import {asyncFile} from "../../../../../asyncapi/file"
+
+export default {
+  private: {
+    tmps: [],
+    cantClear: true,
+    clearControl: {
+      imgs: false,
+      logs: false,
+      sc: false,
+      videoAudio: false
+    },
+    typeColors: {
+      imgs: "#434343",
+      logs: "#434343",
+      sc: "#434343",
+      videoAudio: "#434343",
+      others: "#222222"
+    },
+    storageInfoAvailable: false,
+    totalStorage: "-- MB",
+    usedStorage: "-- MB",
+    availableStorage: "-- MB",
+    totalStorageNum: "--",
+    totalStorageUnit: "MB",
+    usedStorageNum: "--",
+    usedStorageUnit: "MB",
+    availableStorageNum: "--",
+    availableStorageUnit: "MB",
+    scrclass: ""
+  },
+  RefreshPage() {
+    this.cantClear = true
+    this.clearControl = {
+      imgs: false,
+      logs: false,
+      sc: false,
+      videoAudio: false
+    }
+    this.typeColors = {
+      imgs: "#434343",
+      logs: "#434343",
+      sc: "#434343",
+      videoAudio: "#434343",
+      others: "#222222"
+    }
+  },
+  async ClearClick() {
+    const tasks = []
+
+    if (this.clearControl.imgs) {
+      const imgTemp = this.tmps.find((t) => t.alias === "imgs")
+      if (imgTemp) {
+        imgTemp.list.forEach((uri) => {
+          tasks.push(asyncFile.delete({uri}))
+        })
+      }
+    }
+
+    if (this.clearControl.logs) {
+      const logTemp = this.tmps.find((t) => t.alias === "logs")
+      if (logTemp) {
+        logTemp.list.forEach((uri) => {
+          tasks.push(asyncFile.delete({uri}))
+        })
+      }
+    }
+
+    if (this.clearControl.sc) {
+      const contents = await global.savedcontent.SavedContentManager.listAllContent()
+      for (const ct of contents) {
+        await global.savedcontent.SavedContentManager.deleteContent(ct.id)
+      }
+    }
+
+    if (this.clearControl.videoAudio) {
+      const contents = await global.savedcontent.SavedContentManager.listAllContent()
+      const videoAudioContents = contents.filter((ct) => ct.type === 'videoAudio')
+      for (let i = 0; i < videoAudioContents.length; i++) {
+        const ct = videoAudioContents[i]
+        await global.savedcontent.SavedContentManager.deleteContent(ct.id)
+      }
+    }
+
+    await Promise.all(tasks)
+
+    prompt.showToast({
+      message: "清理完毕"
+    })
+
+    this.ScanTemps()
+    this.RefreshPage()
+  },
+  SelectHandler(name) {
+    switch (name) {
+      case "imgs":
+        this.clearControl.imgs = !this.clearControl.imgs
+        this.typeColors.imgs = this.clearControl.imgs ? "#FF7DA8" : "#434343"
+        break
+      case "logs":
+        this.clearControl.logs = !this.clearControl.logs
+        this.typeColors.logs = this.clearControl.logs ? "#FF7DA8" : "#434343"
+        break
+      case "sc":
+        if (!this.clearControl.sc) {
+          prompt.showDialog({
+            message:
+              "清除缓存内容即意味着清除您之前缓存的专栏、音频等内容，且该操作不可逆。确定要继续吗？",
+            success: (data) => {
+              this.clearControl.sc = true
+              this.typeColors.sc = this.clearControl.sc ? "#FF7DA8" : "#434343"
+              this.cantClear = !(
+                this.clearControl.imgs ||
+                this.clearControl.logs ||
+                this.clearControl.sc ||
+                this.clearControl.videoAudio
+              )
+            }
+          })
+        } else {
+          this.clearControl.sc = false
+          this.typeColors.sc = this.clearControl.sc ? "#FF7DA8" : "#434343"
+        }
+        break
+      case "videoAudio":
+        if (!this.clearControl.videoAudio) {
+          prompt.showDialog({
+            message:
+              "清除视频音频将删除所有已缓存的视频音频文件，且该操作不可逆。确定要继续吗？",
+            success: (data) => {
+              this.clearControl.videoAudio = true
+              this.typeColors.videoAudio = this.clearControl.videoAudio ? "#FF7DA8" : "#434343"
+              this.cantClear = !(
+                this.clearControl.imgs ||
+                this.clearControl.logs ||
+                this.clearControl.sc ||
+                this.clearControl.videoAudio
+              )
+            }
+          })
+        } else {
+          this.clearControl.videoAudio = false
+          this.typeColors.videoAudio = this.clearControl.videoAudio ? "#FF7DA8" : "#434343"
+        }
+        break
+    }
+
+    this.cantClear = !(this.clearControl.imgs || this.clearControl.logs || this.clearControl.sc || this.clearControl.videoAudio)
+    global.logger.log("[ClearTmp.SelectHandler] cantClear: ", this.cantClear)
+  },
+  BytesToMB(bytes) {
+    return (bytes / (1024 * 1024)).toFixed(2)
+  },
+  FormatStorage(bytes) {
+    const mb = bytes / (1024 * 1024)
+    if (mb >= 1024) {
+      const gb = mb / 1024
+      return {
+        num: gb.toFixed(2),
+        unit: "GB"
+      }
+    } else {
+      return {
+        num: mb.toFixed(2),
+        unit: "MB"
+      }
+    }
+  },
+  GetStorageInfo() {
+    try {
+      global.logger.log("[ClearTmp] GetStorageInfo start")
+      global.logger.log("[ClearTmp] device module: ", typeof device)
+      global.logger.log("[ClearTmp] device.getTotalStorage: ", typeof device.getTotalStorage)
+      global.logger.log("[ClearTmp] device.getAvailableStorage: ", typeof device.getAvailableStorage)
+      
+      let totalSize = 0
+      let availableSize = 0
+      let gotTotal = false
+      let gotAvailable = false
+      
+      const updateStorageInfo = () => {
+        if (gotTotal && gotAvailable) {
+          global.logger.log("[ClearTmp] updateStorageInfo, total: " + totalSize + ", available: " + availableSize)
+          this.storageInfoAvailable = true
+          const usedSize = totalSize - availableSize
+          
+          // 总存储空间
+          const totalFormatted = this.FormatStorage(totalSize)
+          this.totalStorageNum = totalFormatted.num
+          this.totalStorageUnit = totalFormatted.unit
+          this.totalStorage = totalFormatted.num + " " + totalFormatted.unit
+          
+          // 已用存储空间
+          const usedFormatted = this.FormatStorage(usedSize)
+          this.usedStorageNum = usedFormatted.num
+          this.usedStorageUnit = usedFormatted.unit
+          this.usedStorage = usedFormatted.num + " " + usedFormatted.unit
+          
+          // 可用存储空间
+          const availableFormatted = this.FormatStorage(availableSize)
+          this.availableStorageNum = availableFormatted.num
+          this.availableStorageUnit = availableFormatted.unit
+          this.availableStorage = availableFormatted.num + " " + availableFormatted.unit
+        }
+      }
+      
+      // 尝试使用 device 模块的 API
+      if (device && device.getTotalStorage && device.getAvailableStorage) {
+        global.logger.log("[ClearTmp] Using device module API")
+        
+        device.getTotalStorage({
+          success: (data) => {
+            global.logger.log("[ClearTmp] getTotalStorage success: ", JSON.stringify(data))
+            totalSize = data.totalStorage || data.totalSize || 0
+            gotTotal = true
+            updateStorageInfo()
+          },
+          fail: (data, code) => {
+            global.logger.log("[ClearTmp] getTotalStorage fail, code = " + code + ", data = " + JSON.stringify(data))
+            // 尝试使用 file 模块作为备选
+            this.TryFileStorageAPI()
+          }
+        })
+        
+        device.getAvailableStorage({
+          success: (data) => {
+            global.logger.log("[ClearTmp] getAvailableStorage success: ", JSON.stringify(data))
+            availableSize = data.availableStorage || data.availableSize || 0
+            gotAvailable = true
+            updateStorageInfo()
+          },
+          fail: (data, code) => {
+            global.logger.log("[ClearTmp] getAvailableStorage fail, code = " + code + ", data = " + JSON.stringify(data))
+          }
+        })
+      } else {
+        global.logger.log("[ClearTmp] device module API not available, trying file module")
+        // device 模块 API 不存在，尝试使用 file 模块
+        this.TryFileStorageAPI()
+      }
+    } catch (e) {
+      global.logger.log("[ClearTmp] GetStorageInfo error: " + e.toString())
+      // 出错时保持显示 "--" 占位符
+    }
+  },
+  TryFileStorageAPI() {
+    try {
+      global.logger.log("[ClearTmp] TryFileStorageAPI start")
+      global.logger.log("[ClearTmp] file module: ", typeof file)
+      global.logger.log("[ClearTmp] file.getStorageInfo: ", typeof file.getStorageInfo)
+      
+      if (file && file.getStorageInfo) {
+        file.getStorageInfo({
+          success: (data) => {
+            global.logger.log("[ClearTmp] file.getStorageInfo success: ", JSON.stringify(data))
+            const totalSize = data.totalStorage || data.totalSize || 0
+            const availableSize = data.availableStorage || data.availableSize || 0
+            
+            if (totalSize > 0) {
+              this.storageInfoAvailable = true
+              const usedSize = totalSize - availableSize
+              
+              // 总存储空间
+              const totalFormatted = this.FormatStorage(totalSize)
+              this.totalStorageNum = totalFormatted.num
+              this.totalStorageUnit = totalFormatted.unit
+              this.totalStorage = totalFormatted.num + " " + totalFormatted.unit
+              
+              // 已用存储空间
+              const usedFormatted = this.FormatStorage(usedSize)
+              this.usedStorageNum = usedFormatted.num
+              this.usedStorageUnit = usedFormatted.unit
+              this.usedStorage = usedFormatted.num + " " + usedFormatted.unit
+              
+              // 可用存储空间
+              const availableFormatted = this.FormatStorage(availableSize)
+              this.availableStorageNum = availableFormatted.num
+              this.availableStorageUnit = availableFormatted.unit
+              this.availableStorage = availableFormatted.num + " " + availableFormatted.unit
+            }
+          },
+          fail: (data, code) => {
+            global.logger.log("[ClearTmp] file.getStorageInfo fail, code = " + code + ", data = " + JSON.stringify(data))
+            // 失败时保持显示 "--" 占位符
+          }
+        })
+      } else {
+        global.logger.log("[ClearTmp] file.getStorageInfo not available")
+      }
+    } catch (e) {
+      global.logger.log("[ClearTmp] TryFileStorageAPI error: " + e.toString())
+    }
+  },
+  async getSavedContentList() {
+    try {
+      const contents = await global.savedcontent.SavedContentManager.listAllContent()
+      const ret = await Promise.all(
+        contents.map(async (content) => {
+          try {
+            const fileExists = await asyncFile.access({uri: content.fileUri})
+            if (!fileExists) {
+              return null
+            }
+            const data = await asyncFile.get({uri: content.fileUri})
+            return {
+              uri: content.fileUri,
+              length: data.length,
+              _labelIsSavedContent: true
+            }
+          } catch (e) {
+            global.logger.log("缓存文件不存在，跳过：" + content.fileUri)
+            return null
+          }
+        })
+      )
+      return ret.filter(item => item !== null)
+    } catch (e) {
+      global.logger.error("在扫描临时文件（统计缓存内容）时出错：", e.toString())
+      return []
+    }
+  },
+  async ScanTemps() {
+    try {
+      // 准备统计对象
+      const totalStats = {
+        images: {count: 0, size: 0, list: []},
+        logs: {count: 0, size: 0, list: []},
+        savedContent: {count: 0, size: 0},
+        videoAudio: {count: 0, size: 0, list: []},
+        others: {count: 0, size: 0}
+      }
+
+      // 并行获取文件列表
+      const [rootFiles, logFiles, savedContentFiles] = await Promise.all([
+        asyncFile.list({uri: "internal://files/"}),
+        asyncFile.list({uri: "internal://files/logs"}),
+        this.getSavedContentList()
+      ])
+
+      const fileList = [...rootFiles.fileList, ...logFiles.fileList, ...savedContentFiles]
+
+      for (const file of fileList) {
+        const {uri, length, _labelIsSavedContent} = file
+
+        if (/\.(jpg|png|avif|gif)/i.test(uri)) {
+          totalStats.images.count++
+          totalStats.images.size += length
+          totalStats.images.list.push(uri)
+        } else if (/\.log$/i.test(uri)) {
+          totalStats.logs.count++
+          totalStats.logs.size += length
+          totalStats.logs.list.push(uri)
+        } else if (/\.m4s$/i.test(uri)) {
+          totalStats.videoAudio.count++
+          totalStats.videoAudio.size += length
+          totalStats.videoAudio.list.push(uri)
+        } else if (_labelIsSavedContent) {
+          totalStats.savedContent.count++
+          totalStats.savedContent.size += length
+        } else {
+          totalStats.others.count++
+          totalStats.others.size += length
+        }
+      }
+
+      this.tmps = [
+        {
+          name: "临时图片",
+          alias: "imgs",
+          size: `${this.BytesToMB(totalStats.images.size)} MB`,
+          list: totalStats.images.list
+        },
+        {
+          name: "日志文件",
+          alias: "logs",
+          size: `${this.BytesToMB(totalStats.logs.size)} MB`,
+          list: totalStats.logs.list
+        },
+        {
+          name: "缓存内容",
+          alias: "sc",
+          size: `${this.BytesToMB(totalStats.savedContent.size)} MB`
+        },
+        {
+          name: "视频音频",
+          alias: "videoAudio",
+          size: `${this.BytesToMB(totalStats.videoAudio.size)} MB`,
+          list: totalStats.videoAudio.list
+        },
+        {
+          name: "其它",
+          alias: "others",
+          size: `${this.BytesToMB(totalStats.others.size)} MB`
+        }
+      ]
+    } catch (e) {
+      global.logger.error("在扫描临时文件时出错：", e.toString())
+    }
+  },
+  onInit() {
+    this.ScanTemps()
+    this.GetStorageInfo()
+  }
+}
+</script>
+
+<style lang="less">
+@import "@less/global.less";
+@import "./cleartmp.less";
+</style>

@@ -1,0 +1,77 @@
+‰
+entry∑
+openpage-scrollü
+	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]∑
+fromback-scrollü
+	keyframes2è[{"time":0,"transform":{"translateY":"232px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateY":"0px","scaleX":0.75,"scaleY":0.75}}]∑
+backpage-scrollü
+	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]q
+page
+	display2flex
+flexDirection2column
+
+alignItems2center
+width2100%
+height2100%˘
+scroll
+	display2flex
+flexDirection2column
+
+alignItems2center
+width2100%
+height2100%"
+animationName2openpage-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2reverseò
+scroll-backanim"
+animationName2backpage-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2normalù
+scroll-frombackanim"
+animationName2fromback-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2reverse
+text
+color2white°
+video-audio-item
+width290%
+height2120px-
+backgroundColor2rgba(255, 255, 255, 0.1)
+borderRadius215px
+	marginTop215px
+flexDirection2row
+
+alignItems2center
+
+paddingTop215px
+paddingRight215px
+paddingBottom215px
+paddingLeft215pxn
+video-audio-cover
+width290px
+height290px
+borderRadius210px
+backgroundColor2#333333m
+video-audio-info
+
+flex
+
+marginLeft215px
+flexDirection2column
+justifyContent2centerf
+video-audio-title
+
+fontSize228px
+color2#ffffff
+lines
+textOverflow2ellipsisR
+video-audio-author
+
+fontSize222px
+color2#999999
+	marginTop28px&
+bottom-spacer
+	marginTop225px

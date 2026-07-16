@@ -1,0 +1,67 @@
+<import name="title-bar" src="@components/TitleBar/TitleBar.ux"></import>
+<template>
+  <div class="page">
+    <scroll class="scroll {{scrclass}}" scroll-y="true" bounces="true">
+      <title-bar title="settings.performanceSettings"></title-bar>
+      <text class="tip_text" style="margin-top: 15px">{{ $t("settings.performanceTip") }}</text>
+      
+      <div class="setbase" onclick="SwitchSet('enable_full_anim')" style="margin-top: 20px">
+        <image class="seticon" src="/common/settings_enablefullanim.png"></image>
+        <text class="setext_small">{{ $t("settings.enableFullAnimation") }}</text>
+        <text class="countset_num">{{ enableFullAnimation ? "开" : "关" }}</text>
+      </div>
+      
+      <div class="setbase" onclick="SwitchSet('enable_comment_images')">
+        <image class="seticon" src="/common/settings_enablecommentimages.png"></image>
+        <text class="setext_small">{{ $t("settings.enableCommentImages") }}</text>
+        <text class="countset_num">{{ enableCommentImages ? "开" : "关" }}</text>
+      </div>
+      
+      <text style="margin-top: 30px"></text>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import prompt from "@system.prompt"
+export default {
+  private: {
+    enableFullAnimation: false,
+    enableCommentImages: false,
+    scrclass: ""
+  },
+  SwitchSet(name) {
+    if (name === "enable_full_anim") {
+      this.enableFullAnimation = !this.enableFullAnimation;
+      global.settings.saveSettings({ enableFullAnimation: this.enableFullAnimation });
+      if (this.enableFullAnimation) {
+        prompt.showToast({
+          message: "开启此选项会导致首页等页面在低性能设备上严重卡顿，因此建议保持关闭！",
+          duration: 6000
+        });
+      }
+    } else if (name === "enable_comment_images") {
+      this.enableCommentImages = !this.enableCommentImages;
+      global.settings.saveSettings({ enableCommentImages: this.enableCommentImages });
+      if (this.enableCommentImages) {
+        prompt.showToast({
+          message: "开启评论区图片显示会增加内存占用和流量消耗，低性能设备建议保持关闭！",
+          duration: 6000
+        });
+      }
+    }
+  },
+  UpdateNumView() {
+    this.enableFullAnimation = global.settings.SETTINGS.enableFullAnimation
+    this.enableCommentImages = global.settings.SETTINGS.enableCommentImages
+  },
+  onInit() {
+    this.UpdateNumView()
+  }
+}
+</script>
+
+<style lang="less">
+@import '@less/global.less';
+@import './performance.less';
+</style>

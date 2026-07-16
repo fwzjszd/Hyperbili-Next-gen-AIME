@@ -1,0 +1,136 @@
+ü
+entry·
+openpage-scrollŸ
+	keyframes2[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]·
+fromback-scrollŸ
+	keyframes2[{"time":0,"transform":{"translateY":"232px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateY":"0px","scaleX":0.75,"scaleY":0.75}}]·
+backpage-scrollŸ
+	keyframes2[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]q
+page
+	display2flex
+flexDirection2column
+
+alignItems2center
+width2100%
+height2100%ù
+scroll
+	display2flex
+flexDirection2column
+
+alignItems2center
+width2100%
+height2100%"
+animationName2openpage-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2reverse˜
+scroll-backanim"
+animationName2backpage-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2normal
+scroll-frombackanim"
+animationName2fromback-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2reverse
+text
+color2white›
+reply
+width2319px
+	minHeight2200px
+borderRadius225px
+backgroundColor2#262626
+flexDirection2column
+paddingBottom210pxg
+
+userinfo
+flexDirection2row
+
+alignItems2center
+
+marginLeft225px
+	marginTop217pxE
+	userimg
+width244px
+height244px
+borderRadius250%]
+
+username
+
+fontSize220px
+
+fontWeightØ
+
+maxWidth2160px
+	maxHeight225pxÄ
+replycontentdiv
+width2253px
+height282px
+	maxHeight282px
+	display2flex
+flexDirection2column
+	marginTop27px
+
+marginLeft233px
+justifyContent2
+flex-startd
+replycontent
+width2100%
+
+fontSize220px
+
+fontWeightØ
+textOverflow2ellipsisC
+reply_image_container
+
+marginLeft233px
+	marginTop25pxa
+reply_image
+width260px
+height260px
+borderRadius28px
+	objectFit2containÉ
+reply_replybtn
+backgroundColor2#343434
+width288px
+height234px
+borderRadius210px
+
+alignItems2center
+justifyContent2center
+	marginTop25px
+
+marginLeft233px:
+reply_replytext
+
+fontSize218px
+
+fontWeightØ>
+
+bottom_bar
+flexDirection2row
+
+alignItems2center4
+
+stattext
+
+fontSize214px
+color2#888888:
+rowbar
+flexDirection2row
+
+alignItems2centerO
+	replystat
+flexDirection2row
+height2100%
+
+alignItems2center:
+replystat_count
+
+fontSize216px
+
+fontWeightØ4
+replystat_img
+width222px
+height223px

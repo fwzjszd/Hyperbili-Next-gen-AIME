@@ -1,0 +1,130 @@
+<import name="title-bar" src="@components/TitleBar/TitleBar.ux"></import>
+
+<template>
+  <div class="page">
+    <image style="position: absolute; left: 0px" src="{{getBgImg}}"></image>
+    <scroll scroll-y="true" class="scroll {{scrclass}}" bounces="true">
+      <title-bar title="视频字幕"></title-bar>
+      
+      <!-- 加载中 -->
+      <div if="{{loading}}" class="loading-tip">
+        <text class="loading-text">加载中...</text>
+      </div>
+      
+      <!-- 无字幕 -->
+      <div if="{{!loading && subtitleList.length === 0}}" class="empty-tip">
+        <text class="empty-text">该视频没有字幕</text>
+      </div>
+      
+      <!-- 字幕选择（多个字幕时显示） -->
+      <div if="{{!loading && subtitleList.length > 1 && !showContent}}" class="subtitle-select">
+        <text class="select-title">选择字幕：</text>
+        <div class="subtitle-list">
+          <div class="subtitle-item" for="{{subtitleList}}" @click="SelectSubtitle($item)">
+            <text class="subtitle-name">{{$item.lan_doc || $item.lan}}</text>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 字幕内容 -->
+      <div if="{{!loading && showContent && subtitleContent.length > 0}}" class="subtitle-content">
+        <div class="subtitle-line" for="{{subtitleContent}}">
+          <text class="subtitle-time">{{formatTime($item.from)}}</text>
+          <text class="subtitle-text">{{$item.content}}</text>
+        </div>
+      </div>
+      
+      <!-- 字幕内容为空 -->
+      <div if="{{!loading && showContent && subtitleContent.length === 0}}" class="empty-tip">
+        <text class="empty-text">字幕内容为空</text>
+      </div>
+      
+      <text style="margin-top: 25px"></text>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import prompt from "@system.prompt"
+
+export default {
+  public: {
+    bvid: "",
+    cid: ""
+  },
+  private: {
+    loading: true,
+    subtitleList: [],
+    subtitleContent: [],
+    showContent: false,
+    scrclass: ""
+  },
+  computed: {
+    getBgImg() {
+      return global.bgimg ? global.bgimg.GetCurrentBgImg() : ""
+    }
+  },
+  onInit() {
+    this.LoadSubtitleList()
+  },
+  async LoadSubtitleList() {
+    this.loading = true
+    try {
+      const subtitles = await global.biliclient.getVideoSubtitleList(this.bvid, this.cid)
+      this.subtitleList = subtitles
+      
+      // 如果只有一个字幕，直接显示
+      if (subtitles.length === 1) {
+        await this.LoadSubtitleContent(subtitles[0])
+      } else if (subtitles.length === 0) {
+        // 没有字幕
+      }
+      // 多个字幕时让用户选择
+    } catch (error) {
+      global.logger.error("加载字幕列表失败:", error)
+      prompt.showToast({
+        message: "加载字幕失败，请重试",
+        duration: 3000
+      })
+    } finally {
+      this.loading = false
+    }
+  },
+  async SelectSubtitle(subtitle) {
+    await this.LoadSubtitleContent(subtitle)
+  },
+  async LoadSubtitleContent(subtitle) {
+    this.loading = true
+    try {
+      let subtitleUrl = subtitle.subtitle_url
+      // 如果URL不是完整的，加上https:
+      if (subtitleUrl && subtitleUrl.startsWith("//")) {
+        subtitleUrl = "https:" + subtitleUrl
+      }
+      
+      const content = await global.biliclient.getVideoSubtitleContent(subtitleUrl)
+      this.subtitleContent = content
+      this.showContent = true
+    } catch (error) {
+      global.logger.error("加载字幕内容失败:", error)
+      prompt.showToast({
+        message: "加载字幕内容失败，请重试",
+        duration: 3000
+      })
+    } finally {
+      this.loading = false
+    }
+  },
+  formatTime(seconds) {
+    if (!seconds && seconds !== 0) return ""
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.floor(seconds % 60)
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  }
+}
+</script>
+
+<style lang="less">
+@import '@less/global.less';
+@import './subtitle.less';
+</style>

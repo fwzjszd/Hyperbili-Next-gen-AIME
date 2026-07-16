@@ -1,0 +1,377 @@
+<import name="title-bar" src="@components/TitleBar/TitleBar.ux"></import>
+<import name="full-screen-input" src="@components/FullScreenInput/FullScreenInput.ux"></import>
+<import name="default-button" src="@components/DefaultButton/DefaultButton.ux"></import>
+<import name="online-image" src="@components/BetterOnlineImage/BetterOnlineImage.ux"></import>
+
+<template>
+  <div class="page">
+    <scroll scroll-y="true" class="scroll {{scrclass}}" bounces="true">
+      <title-bar title="video.title"></title-bar>
+      <online-image if="{{renderingCover}}" src="{{vid.pic}}@319w_150h" margin-top="30px" lock-size="true" width="320px"
+        height="150px" loading-anim="true" @loaded="GenBlur"></online-image>
+      <text class="vidtitle">{{ vid.title }}</text>
+      <div class="statbar">
+        <div class="stat">
+          <image class="statimg" src="/common/playcounticon.png" style="width: 23px; height: 25px; margin-top: 2px">
+          </image>
+          <text class="statext">{{ stat_view }}</text>
+        </div>
+        <div class="stat" style="margin-left: 10px" @click="OpenOwnerHome">
+          <image class="statimg" src="/common/uploadericon.png" style="width: 27px; height: 29px"></image>
+          <text class="statext">{{ vid.owner.name }}</text>
+        </div>
+      </div>
+      <scroll scroll-x="true" class="vidtoolbar" style="margin-top: 25px" bounces="true">
+        <div class="vidtool" style="margin-left: 0px" @click="OpenPlayer()">
+          <image class="vidtoolimg" src="/common/vidtool_generatemanifest.png"></image>
+          <text class="vidtooltext">听视频</text>
+        </div>
+        <div class="vidtool" style="margin-left: 0px" @click="LikeClick()" @longpress="PowerIt()">
+          <image class="vidtoolimg" src="{{likesrc}}"></image>
+          <text class="vidtooltext">{{ stat_like }}</text>
+        </div>
+        <div class="vidtool" @click="CoinClick()">
+          <image class="vidtoolimg" src="{{coinsrc}}"></image>
+          <text class="vidtooltext">{{ stat_coin }}</text>
+        </div>
+        <div class="vidtool" @click="AddToFav()">
+          <image class="vidtoolimg" src="{{starsrc}}"></image>
+          <text class="vidtooltext">
+            {{ stat_favorite }}
+          </text>
+        </div>
+        <div class="vidtool" @click="ShowVideoDetail()">
+          <image class="vidtoolimg" src="/common/vidtool_intro.png"></image>
+          <text class="vidtooltext">视频详情</text>
+        </div>
+        <div class="vidtool" @click="ShowSubtitle()">
+          <image class="vidtoolimg" src="/common/vidtool_subtitle.png"></image>
+          <text class="vidtooltext">{{ $t("video.subtitle") }}</text>
+        </div>
+        <div class="vidtool" @click="WatchLaterClick()">
+          <image class="vidtoolimg" src="{{watchlatersrc}}"></image>
+          <text class="vidtooltext">{{ $t("video.showLater") }}</text>
+        </div>
+      </scroll>
+      <default-button text="video.sendReply" margin-top="20px" @click="Reply"></default-button>
+      <image src="/common/featurebtn_replyarea.png" style="margin-top: 15px" @click="GoReplyArea()"></image>
+    </scroll>
+    <full-screen-input style="position: absolute" if="{{replymode}}" @send="SendReply"
+      @exit="ExitInput"></full-screen-input>
+  </div>
+</template>
+
+<script>
+import router from "@system.router"
+import prompt from "@system.prompt"
+
+import {kmeansCircleGradientImage} from "@src/image/jpegkmeans.ts"
+
+export default {
+  public: {
+    bvid: 1 // 视频BVID
+  },
+  private: {
+    vid: {},
+    liked: false,
+    coined: false,
+    stared: false,
+    watchLater: false,
+    likesrc: "/common/vidtool_like.png",
+    coinsrc: "/common/vidtool_coin.png",
+    starsrc: "/common/vidtool_star.png",
+    watchlatersrc: "/common/vidtool_watchlater.png",
+    replymode: false,
+    renderingCover: false,
+    scrclass: ""
+  },
+  computed: {
+    stat_view() {
+      return this.$app.$def.tools.formatNumber(this.vid.stat.view)
+    },
+    stat_like() {
+      return this.$app.$def.tools.formatNumber(this.vid.stat.like)
+    },
+    stat_coin() {
+      return this.$app.$def.tools.formatNumber(this.vid.stat.coin)
+    },
+    stat_favorite() {
+      return this.$app.$def.tools.formatNumber(this.vid.stat.favorite)
+    }
+  },
+  onInit() {
+    global.logger.log("[videodetail] load bvid: " + this.bvid)
+    this.GetVideoDetail()
+    this.UpdateVideoToolbarStatus()
+  },
+  WIPTips() {
+    prompt.showToast({
+      message: "该功能仍在开发中"
+    })
+  },
+  async OpenPlayer() {
+    const exists = await global.savedcontent.SavedContentManager.checkVideoAudioExists(this.bvid)
+    if (exists) {
+      const contents = await global.savedcontent.SavedContentManager.listAllContent()
+      const cachedItem = contents.find((ct) => ct.bvid === this.bvid && ct.type === 'videoAudio')
+      if (cachedItem) {
+        prompt.showToast({ message: '正在加载缓存...', duration: 1000 })
+        router.push({
+          uri: "pages/video/player",
+          params: {
+            bvid: this.bvid,
+            cachedAudioUri: cachedItem.fileUri,
+            cachedTitle: cachedItem.title,
+            cachedCoverUrl: cachedItem.coverUrl,
+            cachedAuthor: cachedItem.author
+          }
+        })
+        return
+      }
+    }
+    router.push({
+      uri: "pages/video/player",
+      params: {
+        bvid: this.bvid
+      }
+    })
+  },
+  OpenOwnerHome() {
+    router.push({
+      uri: "pages/user",
+      params: {
+        uid: this.vid.owner.mid
+      }
+    })
+  },
+  async GetVideoDetail() {
+    this.vid = await global.biliclient.getVideoInfoByBVID(this.bvid)
+    this.renderingCover = true
+  },
+  async UpdateVideoToolbarStatus() {
+    this.stared = await global.biliclient.isVideoStaredByBVID(this.bvid)
+    this.liked = await global.biliclient.isVideoLikedByBVID(this.bvid)
+    this.coined = await global.biliclient.isVideoCoinedByBVID(this.bvid)
+    this.watchLater = global.watchlater.WatchLaterManager.isVideoInWatchLater(this.bvid)
+    this.UpdateToolBarIconSrc()
+  },
+  UpdateToolBarIconSrc() {
+    this.likesrc = this.liked ? "/common/vidtool_liked.png" : "/common/vidtool_like.png"
+    this.coinsrc = this.coined ? "/common/vidtool_coined.png" : "/common/vidtool_coin.png"
+    this.starsrc = this.stared ? "/common/vidtool_stared.png" : "/common/vidtool_star.png"
+    // 稍后再看没有专门的已添加图标，用透明度或其他方式区分
+    // 这里暂时用同一个图标，通过Toast提示来反馈操作结果
+    this.watchlatersrc = "/common/vidtool_watchlater.png"
+  },
+  async PowerIt() {
+    prompt.showToast({message: "一键三连中！"})
+    this.LikeClick()
+    this.CoinClick()
+    this.AddToFav()
+  },
+  async LikeClick() {
+    const likeValue = this.liked ? 0 : 1
+    var result = await global.biliclient.LikeVideo(this.vid.bvid, likeValue)
+    const action = this.liked ? "取消点赞" : "点赞"
+    const message =
+      result.code === 0 ? `${action}成功` : `${action}失败，错误代码：${result.code} 原因：${result.message}`
+    prompt.showToast({
+      message,
+      duration: result.code === 0 ? 2000 : 4000
+    })
+    this.UpdateVideoToolbarStatus()
+  },
+  async CoinClick() {
+    var result = await global.biliclient.CoinVideo(this.vid.bvid, 1)
+    const message =
+      result.code === 0 ? "投币成功" : `投币失败，错误代码：${result.code} 原因：${result.message}`
+    prompt.showToast({
+      message,
+      duration: result.code === 0 ? 2000 : 4000
+    })
+    this.UpdateVideoToolbarStatus()
+  },
+  async SendReply(evt) {
+    this.replymode = false
+    if (evt.detail.content === 0) {
+      return prompt.showToast({
+        message: "评论内容不得为空！",
+        duration: 2000
+      })
+    }
+
+    const result = await global.biliclient.GiveReply(1, this.vid.aid, evt.detail.content)
+    const message =
+      result.code === 0 ? "发送成功" : `发送失败，错误代码：${result.code} 原因：${result.message}`
+    prompt.showToast({
+      message,
+      duration: result.code === 0 ? 2000 : 4000
+    })
+  },
+  ExitInput() {
+    this.replymode = false
+  },
+  Reply() {
+    this.replymode = true
+  },
+  DisabledFeaturesWarning() {
+    prompt.showToast({
+      message: "由于B站风控，该功能暂不可用"
+    })
+  },
+  async AISummary() {
+    const summary =
+      (await global.biliclient.getVideoAISummaryByBVID(
+        this.vid.bvid,
+        this.vid.cid,
+        this.vid.owner.mid
+      )) || "该视频没有摘要，可能是其内容中包含敏感信息或没有可识别的音频"
+    router.push({
+      uri: "pages/tools/textdetail",
+      params: {text: summary}
+    })
+  },
+  ShowVideoIntro() {
+    try {
+      // 格式化时长
+      const duration = this.vid.duration || 0
+      const minutes = Math.floor(duration / 60)
+      const seconds = duration % 60
+      const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`
+      
+      // 构建介绍文本
+      const introText = 
+        `标题：${this.vid.title || '未知'}\n\n` +
+        `时长：${durationStr}\n\n` +
+        `介绍：\n${this.vid.desc || '暂无简介'}`
+      
+      router.push({
+        uri: "pages/tools/textdetail",
+        params: {
+          text: introText,
+          titletext: "视频介绍"
+        }
+      })
+    } catch (e) {
+      global.logger.log("显示视频介绍出错：" + e.toString())
+      prompt.showToast({
+        message: "获取视频介绍失败"
+      })
+    }
+  },
+  // 显示视频详情（包含视频介绍和AI总结）
+  async ShowVideoDetail() {
+    try {
+      // 格式化时长
+      const duration = this.vid.duration || 0
+      const minutes = Math.floor(duration / 60)
+      const seconds = duration % 60
+      const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`
+      
+      // 构建视频介绍部分
+      let detailText = 
+        `【视频介绍】\n` +
+        `标题：${this.vid.title || '未知'}\n` +
+        `时长：${durationStr}\n` +
+        `UP主：${this.vid.owner?.name || '未知'}\n\n` +
+        `简介：\n${this.vid.desc || '暂无简介'}\n\n`
+      
+      // 获取AI总结
+      try {
+        const summary = await global.biliclient.getVideoAISummaryByBVID(
+          this.vid.bvid,
+          this.vid.cid,
+          this.vid.owner.mid
+        )
+        if (summary) {
+          detailText += `\n【AI视频总结】\n${summary}`
+        } else {
+          detailText += `\n【AI视频总结】\n该视频没有摘要，可能是其内容中包含敏感信息或没有可识别的音频`
+        }
+      } catch (e) {
+        global.logger.log("获取AI总结出错：" + e.toString())
+        detailText += `\n【AI视频总结】\n获取失败，请稍后再试`
+      }
+      
+      router.push({
+        uri: "pages/tools/textdetail",
+        params: {
+          text: detailText,
+          titletext: "视频详情"
+        }
+      })
+    } catch (e) {
+      global.logger.log("显示视频详情出错：" + e.toString())
+      prompt.showToast({
+        message: "获取视频详情失败"
+      })
+    }
+  },
+  ShowSubtitle() {
+    router.push({
+      uri: "pages/video/subtitle",
+      params: {
+        bvid: this.bvid,
+        cid: this.vid.cid
+      }
+    })
+  },
+  async AddToFav() {
+    let result
+    let action
+    if (this.stared) {
+      // 已收藏，取消收藏
+      result = await global.biliclient.unstarVideoFromDefaultFavFolderByBVID(this.bvid)
+      action = "取消收藏"
+    } else {
+      // 未收藏，添加收藏
+      result = await global.biliclient.starVideoToDefaultFavFolderByBVID(this.bvid)
+      action = "收藏"
+    }
+    const message = result ? `${action}失败，请重试，或重新登录后再试` : `${action}成功`
+    prompt.showToast({message})
+    this.UpdateVideoToolbarStatus()
+  },
+  async WatchLaterClick() {
+    let success
+    let action
+    if (this.watchLater) {
+      // 已添加，从稍后再看移除
+      success = await global.watchlater.WatchLaterManager.removeVideo(this.bvid)
+      action = "取消稍后再看"
+    } else {
+      // 未添加，添加到稍后再看
+      success = await global.watchlater.WatchLaterManager.addVideo(this.vid)
+      action = "添加到稍后再看"
+    }
+    const message = success ? `${action}成功` : `${action}失败，请重试`
+    prompt.showToast({
+      message,
+      duration: 2000
+    })
+    this.UpdateVideoToolbarStatus()
+  },
+  async GenBlur(evt) {
+    // 该Feature在现在任何设备上运行都会卡死，故注释
+    /*
+      global.logger.log(`\n[GenBlur] 开始处理封面取色模糊`);
+      await kmeansCircleGradientImage(evt.detail.uri)
+    */
+  },
+  GoReplyArea() {
+    router.push({
+      uri: "pages/reply/replys",
+      params: {
+        type: 1,
+        oid: this.vid.aid,
+        replycount: this.vid.stat.reply
+      }
+    })
+  }
+}
+</script>
+
+<style lang="less">
+@import "@less/global.less";
+@import "./videodetail.less";
+</style>

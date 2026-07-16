@@ -1,0 +1,83 @@
+ü
+entry∑
+openpage-scrollü
+	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]∑
+fromback-scrollü
+	keyframes2è[{"time":0,"transform":{"translateY":"232px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateY":"0px","scaleX":0.75,"scaleY":0.75}}]∑
+backpage-scrollü
+	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]q
+page
+	display2flex
+flexDirection2column
+
+alignItems2center
+width2100%
+height2100%˘
+scroll
+	display2flex
+flexDirection2column
+
+alignItems2center
+width2100%
+height2100%"
+animationName2openpage-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2reverseò
+scroll-backanim"
+animationName2backpage-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2normalù
+scroll-frombackanim"
+animationName2fromback-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2reverse
+text
+color2whiteﬂ
+	ctxcard
+	display2flex
+flexDirection2column
+
+paddingTop215px
+paddingRight215px
+paddingBottom215px
+paddingLeft215px
+backgroundColor2#222222
+borderRadius215px
+width2300px¸
+	ctxdesc
+	display2flex
+flexDirection2row
+
+paddingTop20px
+paddingRight20px
+paddingBottom20px
+paddingLeft20px
+backgroundColor2	#00000000
+width2100%!
+justifyContent2space-between
+
+alignItems2center2
+	desctxt
+
+fontSize224px
+
+fontWeightÿ+
+gs
+
+fontSize220px
+color2gray
+	mp-scroll
+width2100%Ω
+mp
+	display2flex
+flexDirection2row
+
+paddingTop20px
+paddingRight20px
+paddingBottom20px
+paddingLeft20px
+backgroundColor2	#00000000
+height2100%

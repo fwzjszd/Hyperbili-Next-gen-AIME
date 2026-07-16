@@ -1,0 +1,94 @@
+¡
+entry∑
+openpage-scrollü
+	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]∑
+fromback-scrollü
+	keyframes2è[{"time":0,"transform":{"translateY":"232px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateY":"0px","scaleX":0.75,"scaleY":0.75}}]∑
+backpage-scrollü
+	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]q
+page
+	display2flex
+flexDirection2column
+
+alignItems2center
+width2100%
+height2100%˘
+scroll
+	display2flex
+flexDirection2column
+
+alignItems2center
+width2100%
+height2100%"
+animationName2openpage-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2reverseò
+scroll-backanim"
+animationName2backpage-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2normalù
+scroll-frombackanim"
+animationName2fromback-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2reverse
+text
+color2whiteò
+	searchbar
+backgroundColor2#222222
+width2255px
+height250px
+borderRadius2130px
+flexDirection2row
+
+alignItems2centerG
+	typebar
+flexDirection2row
+width2257px
+height234px3
+
+typetext
+
+fontSize225px
+
+fontWeightÿ0
+
+swipermain
+width2100%
+height297%/
+
+tiplabel
+width2100%
+height250pxH
+	listtip
+
+marginLeft272px
+
+fontSize225px
+
+fontWeightÿ»
+swiper_container
+	display2flex
+width2100%
+height2100%
+flexDirection2column
+
+alignItems2center
+	boxSizing2
+border-box
+
+paddingTop20px
+paddingRight20px
+paddingBottom20px
+paddingLeft20px
+	marginTop20px
+marginRight20px
+marginBottom20px
+
+marginLeft20px1
+
+swiper_box
+width2100%
+height2100%

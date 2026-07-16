@@ -1,0 +1,81 @@
+@import '@less/defs.less';
+@import '@less/color.less';
+
+.cleartip {
+    font-size: 35px;
+    font-weight: 600;
+    color: #9E9E9E;
+}
+
+.typebox {
+    .radius(30px);
+    .flex-column(10px);
+}
+
+.tmptype {
+    .flex-row(10px 15px, #434343);
+    .radius(20px);
+    width: 100%;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.typetxt {
+    font-weight: 600;
+    font-size: 30px;
+}
+
+.typesize {
+    font-weight: 600;
+    font-size: 30px;
+    color: gray;
+}
+
+.storage_card {
+    margin-top: 20px;
+    margin-left: 20px;
+    margin-right: 20px;
+    margin-bottom: 10px;
+    padding: 15px 10px;
+    background-color: #262626;
+    border-radius: 20px;
+    width: calc(100% - 40px);
+    box-sizing: border-box;
+    flex-direction: row;
+    justify-content: space-around;
+    align-items: center;
+}
+
+.storage_item {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+}
+
+.storage_num {
+    font-size: 32px;
+    font-weight: 700;
+    color: #FFFFFF;
+    line-height: 1;
+}
+
+.storage_unit {
+    font-size: 18px;
+    font-weight: 500;
+    color: #999999;
+    margin-top: 2px;
+}
+
+.storage_label {
+    font-size: 20px;
+    color: #999999;
+    margin-top: 6px;
+}
+
+.storage_divider {
+    width: 1px;
+    height: 50px;
+    background-color: #333333;
+    flex-shrink: 0;
+}

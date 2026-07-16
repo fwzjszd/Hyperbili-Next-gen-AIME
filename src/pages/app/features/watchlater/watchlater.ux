@@ -1,0 +1,52 @@
+<import name="title-bar" src="@components/TitleBar/TitleBar.ux"></import>
+<import name="videoshow" src="@components/Video/Video.ux"></import>
+
+<template>
+  <div class="page">
+    <image style="position: absolute; left: 0px" src="{{getBgImg}}"></image>
+    <scroll scroll-y="true" class="scroll {{scrclass}}" bounces="true">
+      <title-bar title="稍后再看"></title-bar>
+      
+      <div if="{{watchLaterList.length === 0}}" class="empty-tip">
+        <text class="empty-text">暂无稍后再看的视频</text>
+      </div>
+      
+      <div class="watchlaterlist" if="{{watchLaterList.length > 0}}">
+        <videoshow for="{{watchLaterList}}" video="{{$item}}"></videoshow>
+      </div>
+      
+      <text style="margin-top: 25px"></text>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import router from "@system.router"
+import prompt from "@system.prompt"
+
+export default {
+  private: {
+    watchLaterList: [],
+    scrclass: ""
+  },
+  computed: {
+    getBgImg() {
+      return global.bgimg ? global.bgimg.GetCurrentBgImg() : ""
+    }
+  },
+  onInit() {
+    this.LoadWatchLaterList()
+  },
+  onShow() {
+    this.LoadWatchLaterList()
+  },
+  LoadWatchLaterList() {
+    this.watchLaterList = global.watchlater.WatchLaterManager.getWatchLaterList()
+  }
+}
+</script>
+
+<style lang="less">
+@import '@less/global.less';
+@import './watchlater.less';
+</style>

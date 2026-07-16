@@ -1,0 +1,84 @@
+—
+entry∑
+openpage-scrollü
+	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]∑
+fromback-scrollü
+	keyframes2è[{"time":0,"transform":{"translateY":"232px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateY":"0px","scaleX":0.75,"scaleY":0.75}}]∑
+backpage-scrollü
+	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]q
+page
+	display2flex
+flexDirection2column
+
+alignItems2center
+width2100%
+height2100%˘
+scroll
+	display2flex
+flexDirection2column
+
+alignItems2center
+width2100%
+height2100%"
+animationName2openpage-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2reverseò
+scroll-backanim"
+animationName2backpage-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2normalù
+scroll-frombackanim"
+animationName2fromback-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2reverse
+text
+color2whiteÑ
+
+featurebox
+width2321px
+height2222px
+borderRadius233px
+backgroundColor2#222222
+flexDirection2columnL
+	boxline
+flexDirection2row
+
+alignItems2center
+width2100%Z
+	feature
+flexDirection2column
+justifyContent2center
+
+alignItems2centerJ
+featuretext
+
+fontSize225px
+
+fontWeightÿ
+	marginTop25pxL
+
+featureimg
+width250px
+height250px
+	objectFit2
+scale-downŒ
+bubble
+
+position2absolute
+right20px
+top20px
+width238px
+height232px
+borderRadius2100px
+backgroundColor2#ff4141
+
+alignItems2center
+justifyContent2center6
+bubble_text
+
+fontSize214px
+
+fontWeightÿ

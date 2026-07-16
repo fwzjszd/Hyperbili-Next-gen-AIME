@@ -1,0 +1,84 @@
+<import name="title-bar" src="@components/TitleBar/TitleBar.ux"></import>
+<import name="online-image" src="@components/BetterOnlineImage/BetterOnlineImage.ux"></import>
+
+<template>
+  <div class="page">
+    <scroll class="scroll {{scrclass}}" scroll-y="true" scroll-x="true" bounces="true">
+      <title-bar title="图片预览"></title-bar>
+      <div class="image_container">
+        <online-image 
+          src="{{compressed_img_uri}}" 
+          width="{{image_width}}"
+          height="{{image_height}}"
+          lock-size="true"
+          object-fit="contain"
+          loading-anim="true"
+          margin-top="20px">
+        </online-image>
+      </div>
+      <text class="tip_text" if="{{showTip}}">图片已压缩显示，点击可查看原图</text>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import device from "@system.device"
+export default {
+  public: {
+    img_uri: "/common/logo.png"
+  },
+  private: {
+    compressed_img_uri: "",
+    image_width: "300px",
+    image_height: "300px",
+    scrclass: "",
+    showTip: false
+  },
+  onInit() {
+    // 给图片URL加上压缩参数，确保能快速加载
+    if (this.img_uri && this.img_uri.indexOf("@") === -1) {
+      this.compressed_img_uri = this.img_uri + "@480w_480h"
+    } else {
+      this.compressed_img_uri = this.img_uri
+    }
+    
+    // 获取设备信息，设置合适的图片尺寸
+    device.getInfo({
+      success: (info) => {
+        const screenWidth = info.screenWidth || 320
+        const screenHeight = info.screenHeight || 400
+        // 图片宽度为屏幕宽度减去左右边距
+        const imgWidth = screenWidth - 40
+        this.image_width = imgWidth + "px"
+        // 图片高度为屏幕高度减去顶部标题栏和边距
+        const imgHeight = screenHeight - 120
+        this.image_height = imgHeight + "px"
+      }
+    })
+  },
+  onReady() {
+    global.logger.log("[PictureDetail] onReady, img_uri: " + this.img_uri)
+    global.logger.log("[PictureDetail] compressed_img_uri: " + this.compressed_img_uri)
+  }
+}
+</script>
+
+<style lang="less">
+@import '@less/global.less';
+
+.image_container {
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.tip_text {
+  margin-top: 20px;
+  font-size: 20px;
+  color: #999999;
+  text-align: center;
+  width: 100%;
+}
+</style>

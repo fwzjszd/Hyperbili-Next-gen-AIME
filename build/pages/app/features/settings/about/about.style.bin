@@ -1,0 +1,117 @@
+Ü
+entry∑
+openpage-scrollü
+	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]∑
+fromback-scrollü
+	keyframes2è[{"time":0,"transform":{"translateY":"232px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateY":"0px","scaleX":0.75,"scaleY":0.75}}]∑
+backpage-scrollü
+	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]q
+page
+	display2flex
+flexDirection2column
+
+alignItems2center
+width2100%
+height2100%˘
+scroll
+	display2flex
+flexDirection2column
+
+alignItems2center
+width2100%
+height2100%"
+animationName2openpage-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2reverseò
+scroll-backanim"
+animationName2backpage-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2normalù
+scroll-frombackanim"
+animationName2fromback-scroll!
+animationTimingFunction2ease
+animationDuration2500ms
+animationDirection2reverse
+text
+color2white/
+text
+
+fontSize235px
+
+fontWeightÿ+
+gr#
+color2rgba(255, 255, 255, 0.6)Å
+appbar
+	display2flex
+flexDirection2row
+
+paddingTop215px
+paddingRight220px
+paddingBottom215px
+paddingLeft220px
+backgroundColor2#222222
+borderRadius260px
+justifyContent2
+flex-start
+
+alignItems2centerB
+logo
+borderRadius250%
+width260px
+height260px1
+ver
+color2#9e9e9e
+
+marginLeft215pxñ
+
+developers
+	display2flex
+flexDirection2column
+
+paddingTop215px
+paddingRight210px
+paddingBottom215px
+paddingLeft210px
+backgroundColor2#222222
+borderRadius250px
+justifyContent2center
+
+alignItems2center
+width2364px≤
+	developer
+	display2flex
+flexDirection2row
+
+paddingTop20px
+paddingRight20px
+paddingBottom20px
+paddingLeft20px
+backgroundColor2	#00000000?
+img
+width252px
+height253px
+	objectFit2none"
+	devname
+paddingLeft222px^
+	devrole
+
+fontSize220px
+color2#9e9e9e
+paddingLeft222px
+	marginTop22pxö
+disclaimer-btn
+	display2flex
+flexDirection2column
+
+paddingTop215px
+paddingRight240px
+paddingBottom215px
+paddingLeft240px
+backgroundColor2#262626
+borderRadius290px
+width2270px
+justifyContent2center
+
+alignItems2center
