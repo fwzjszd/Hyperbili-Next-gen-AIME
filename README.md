@@ -17,7 +17,7 @@
 开发者与Hyperbili作者无关，有问题请勿向原作者反馈。
 原项目地址：https://github.com/Searchstars/HyperBilibili
 
-以下为原项目README：
+## 原项目README：
 ## HyperBilibili （澎湃哔哩）
 在Vela嵌入式设备上基于QuickApp实现的第三方B站客户端
 
