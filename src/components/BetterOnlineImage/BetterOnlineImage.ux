@@ -17,7 +17,7 @@ export default {
         div_style: {},
         anims: {
             loading: null,
-            loading_src: {value: "/common/seqanims/dotloadingWhite/icons8-dotsloading_颜色反转-1.png"}
+            loading_src: {value: "/common/seqanims/dotloadingWhite/icons8-dotsloading-white-1.png"}
         }
     },
     props: {
@@ -54,7 +54,7 @@ export default {
             "onlineImageComponent",
             this.anims.loading_src,
             28,
-            "/common/seqanims/dotloadingWhite/icons8-dotsloading_颜色反转-*.png",
+            "/common/seqanims/dotloadingWhite/icons8-dotsloading-white-*.png",
             1000,
             true
         )

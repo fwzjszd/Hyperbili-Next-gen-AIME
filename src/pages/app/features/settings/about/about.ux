@@ -1,3 +1,4 @@
+<import name="TitleBar" src="../../../../../components/TitleBar/TitleBar"></import>
 <import name="title-bar" src="@components/TitleBar/TitleBar.ux"></import>
 
 <template>
@@ -17,20 +18,27 @@
           <text class="text">Studios</text>
         </div>
       </div>
-      <text class="text gr" style="margin-top: 22px">魔改制作</text>
+      <text class="text gr" style="margin-top: 22px">修改制作</text>
       <div class="developers" style="margin-top: 15px">
+        <div class="developer" style="margin-top: 10px">
+          <text class="text devname">@TRAE</text>
+        </div>
+        <div class="developer" style="margin-top: 10px">
+          <text class="text devname">@豆包</text>
+        </div>
+        <text class="text devrole">提供运行环境及代码修改</text>
         <div class="developer">
           <text class="text devname">@干又cyper</text>
         </div>
         <text class="text devrole">思路提供</text>
         <div class="developer" style="margin-top: 10px">
-          <text class="text devname">@羊羽Weslie</text>
+          <text class="text devname">@羊羽 Weslie</text>
         </div>
         <text class="text devrole">主要编辑、源码提供</text>
         <div class="developer" style="margin-top: 10px">
-          <text class="text devname">@豆包</text>
+          <text class="text devname">@BAQ4Q</text>
         </div>
-        <text class="text devrole">提供运行环境及代码修改</text>
+        <text class="text devrole">特别鸣谢</text>
       </div>
       <text class="text gr" style="margin-top: 30px">{{ $t("about.developers") }}</text>
       <div class="developers" style="margin-top: 15px">
@@ -65,6 +73,9 @@
       </div>
       <div @click="OpenBuildInfo" class="disclaimer-btn" style="margin-top: 20px">
         <text style="font-size: 28px; font-weight: 600">{{ $t("about.buildinfo") }}</text>
+      </div>
+      <div @click="OpenDeviceInfo" class="disclaimer-btn" style="margin-top: 20px">
+        <text style="font-size: 28px; font-weight: 600">设备信息</text>
       </div>
       <text style="margin-top: 25px"></text>
     </scroll>
@@ -105,6 +116,11 @@ export default {
   OpenOpenSoftwareWarning() {
     router.push({
       uri: "pages/app/features/settings/opensoftware"
+    })
+  },
+  OpenDeviceInfo() {
+    router.push({
+      uri: "pages/app/features/settings/about/deviceinfo"
     })
   }
 }

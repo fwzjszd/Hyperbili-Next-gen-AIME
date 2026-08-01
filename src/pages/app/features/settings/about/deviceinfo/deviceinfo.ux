@@ -1,0 +1,198 @@
+<import name="title-bar" src="@components/TitleBar/TitleBar.ux"></import>
+
+<template>
+  <div class="page">
+    <scroll class="scroll {{scrclass}}" scroll-y="true" bounces="true">
+      <title-bar title="设备信息"></title-bar>
+
+      <div class="info-card" if="{{!loadingFailed}}">
+        <text class="info-title">基础信息</text>
+        <div class="info-row" for="{{basicInfo}}">
+          <text class="info-label">{{$item.label}}</text>
+          <text class="info-value">{{$item.value}}</text>
+        </div>
+      </div>
+
+      <div class="info-card" if="{{!loadingFailed}}">
+        <text class="info-title">存储空间</text>
+        <div class="info-row">
+          <text class="info-label">总空间</text>
+          <text class="info-value">{{storageTotal}}</text>
+        </div>
+        <div class="info-row">
+          <text class="info-label">可用空间</text>
+          <text class="info-value">{{storageAvailable}}</text>
+        </div>
+        <div class="info-row">
+          <text class="info-label">已用空间</text>
+          <text class="info-value">{{storageUsed}}</text>
+        </div>
+      </div>
+
+      <text class="loading-text" if="{{loadingFailed}}">设备信息获取失败</text>
+      <text style="margin-top: 20px"></text>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import device from "@system.device"
+
+export default {
+  private: {
+    scrclass: "",
+    basicInfo: [],
+    storageTotal: '加载中...',
+    storageAvailable: '加载中...',
+    storageUsed: '加载中...',
+    loadingFailed: false
+  },
+  onInit() {
+    this.loadAllDeviceInfo()
+  },
+  loadAllDeviceInfo() {
+    var self = this
+    var infoItems = []
+    var totalBytes = null
+    var availableBytes = null
+
+    // 获取设备基础信息（官方文档完整字段）
+    device.getInfo({
+      success: function(ret) {
+        var fieldDefs = [
+          {label: '品牌', key: 'brand'},
+          {label: '制造商', key: 'manufacturer'},
+          {label: '型号', key: 'model'},
+          {label: '产品名', key: 'product'},
+          {label: '操作系统', key: 'osType'},
+          {label: '系统版本名', key: 'osVersionName'},
+          {label: '系统版本号', key: 'osVersionCode'},
+          {label: '平台版本名', key: 'platformVersionName'},
+          {label: '平台版本号', key: 'platformVersionCode'},
+          {label: '系统语言', key: 'language'},
+          {label: '系统地区', key: 'region'},
+          {label: '框架API版本', key: 'APILevel'},
+          {label: '屏幕宽度', key: 'screenWidth'},
+          {label: '屏幕高度', key: 'screenHeight'},
+          {label: '屏幕密度', key: 'screenDensity'},
+          {label: '屏幕形状', key: 'screenShape'},
+          {label: '设备类型', key: 'deviceType'}
+        ]
+        for (var i = 0; i < fieldDefs.length; i++) {
+          var f = fieldDefs[i]
+          var val = ret[f.key]
+          if (val !== undefined && val !== null && val !== '') {
+            infoItems.push({label: f.label, value: '' + val})
+          }
+        }
+      },
+      fail: function() {
+        self.loadingFailed = true
+      }
+    })
+
+    // 获取设备唯一标识（需 hapjs.permission.DEVICE_INFO 权限）
+    device.getDeviceId({
+      success: function(ret) {
+        if (ret.deviceId) {
+          infoItems.push({label: '设备ID', value: ret.deviceId})
+        }
+      },
+      fail: function() {}
+    })
+
+    // 获取存储信息
+    device.getTotalStorage({
+      success: function(ret) {
+        totalBytes = parseInt(ret.totalStorage) || 0
+      },
+      fail: function() {}
+    })
+
+    device.getAvailableStorage({
+      success: function(ret) {
+        availableBytes = parseInt(ret.availableStorage) || 0
+      },
+      fail: function() {}
+    })
+
+    // Vela 中 device API 可能同步执行，延迟赋值确保 VM 已就绪
+    setTimeout(function() {
+      self.basicInfo = infoItems
+      if (totalBytes !== null) {
+        self.storageTotal = self.formatStorage(totalBytes)
+      } else {
+        self.storageTotal = '获取失败'
+      }
+      if (availableBytes !== null) {
+        self.storageAvailable = self.formatStorage(availableBytes)
+      } else {
+        self.storageAvailable = '获取失败'
+      }
+      if (totalBytes !== null && availableBytes !== null) {
+        self.storageUsed = self.formatStorage(totalBytes - availableBytes)
+      } else {
+        self.storageUsed = '获取失败'
+      }
+    }, 250)
+  },
+  formatStorage(bytes) {
+    if (!bytes && bytes !== 0) return 'N/A'
+    var mb = bytes / (1024 * 1024)
+    if (mb >= 1024) {
+      return (mb / 1024).toFixed(2) + ' GB'
+    }
+    return mb.toFixed(2) + ' MB'
+  }
+}
+</script>
+
+<style lang="less">
+@import '@less/global.less';
+
+.info-card {
+  flex-direction: column;
+  width: 370px;
+  margin-top: 15px;
+  padding-left: 15px;
+  padding-right: 15px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  background-color: #1a1a1a;
+  border-radius: 16px;
+}
+
+.info-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 10px;
+}
+
+.info-row {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.info-label {
+  font-size: 20px;
+  color: #9e9e9e;
+}
+
+.info-value {
+  font-size: 20px;
+  font-weight: 600;
+  color: #e0e0e0;
+  text-align: right;
+}
+
+.loading-text {
+  font-size: 20px;
+  color: #9e9e9e;
+  text-align: center;
+  margin-top: 40px;
+}
+</style>

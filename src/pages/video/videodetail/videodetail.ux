@@ -10,6 +10,7 @@
       <online-image if="{{renderingCover}}" src="{{vid.pic}}@319w_150h" margin-top="30px" lock-size="true" width="320px"
         height="150px" loading-anim="true" @loaded="GenBlur"></online-image>
       <text class="vidtitle">{{ vid.title }}</text>
+      <text class="vidpubdate">{{ pubdateText }}</text>
       <div class="statbar">
         <div class="stat">
           <image class="statimg" src="/common/playcounticon.png" style="width: 23px; height: 25px; margin-top: 2px">
@@ -22,9 +23,9 @@
         </div>
       </div>
       <scroll scroll-x="true" class="vidtoolbar" style="margin-top: 25px" bounces="true">
-        <div class="vidtool" style="margin-left: 0px" @click="OpenPlayer()">
+        <div class="vidtool" style="margin-left: 0px" @click="GoVideoContent()">
           <image class="vidtoolimg" src="/common/vidtool_generatemanifest.png"></image>
-          <text class="vidtooltext">听视频</text>
+          <text class="vidtooltext">视频内容</text>
         </div>
         <div class="vidtool" style="margin-left: 0px" @click="LikeClick()" @longpress="PowerIt()">
           <image class="vidtoolimg" src="{{likesrc}}"></image>
@@ -44,15 +45,35 @@
           <image class="vidtoolimg" src="/common/vidtool_intro.png"></image>
           <text class="vidtooltext">视频详情</text>
         </div>
-        <div class="vidtool" @click="ShowSubtitle()">
-          <image class="vidtoolimg" src="/common/vidtool_subtitle.png"></image>
-          <text class="vidtooltext">{{ $t("video.subtitle") }}</text>
+        <div class="vidtool" if="{{hasChapters}}" @click="GoChapters()">
+          <image class="vidtoolimg" src="/common/vidtool_intro.png"></image>
+          <text class="vidtooltext">章节</text>
         </div>
         <div class="vidtool" @click="WatchLaterClick()">
           <image class="vidtoolimg" src="{{watchlatersrc}}"></image>
           <text class="vidtooltext">{{ $t("video.showLater") }}</text>
         </div>
+        <div class="vidtool watchonphone" @click="WatchOnPhone()">
+          <image class="vidtoolimg" src="/common/vidtool_watchonphone.png"></image>
+          <text class="vidtooltext watchonphonetext">在手机上观看</text>
+        </div>
       </scroll>
+
+      <!-- 分P选择 -->
+      <div class="pages-section" if="{{hasPages}}">
+        <text class="pages-title">分P · 共 {{totalPages}} 集 · 当前第 {{currentPageNum}} 集</text>
+        <scroll scroll-y="true" class="pages-scroll" bounces="true">
+          <block for="{{vid.pages}}">
+            <div class="page-item {{currentPageIndex === $idx ? 'page-item-active' : ''}}"
+                 @click="SelectPage($idx)">
+              <text class="page-num">P{{$item.page}}</text>
+              <text class="page-part">{{$item.part}}</text>
+              <text class="page-dur">{{FormatDuration($item.duration)}}</text>
+            </div>
+          </block>
+        </scroll>
+      </div>
+
       <default-button text="video.sendReply" margin-top="20px" @click="Reply"></default-button>
       <image src="/common/featurebtn_replyarea.png" style="margin-top: 15px" @click="GoReplyArea()"></image>
     </scroll>
@@ -83,6 +104,13 @@ export default {
     watchlatersrc: "/common/vidtool_watchlater.png",
     replymode: false,
     renderingCover: false,
+    hasChapters: false,
+    hasPages: false,
+    totalPages: 1,
+    currentPageIndex: 0,
+    currentPageNum: 1,
+    currentCid: null,
+    currentPart: '',
     scrclass: ""
   },
   computed: {
@@ -97,10 +125,23 @@ export default {
     },
     stat_favorite() {
       return this.$app.$def.tools.formatNumber(this.vid.stat.favorite)
+    },
+    pubdateText() {
+      if (!this.vid.pubdate) return ""
+      const d = new Date(this.vid.pubdate * 1000)
+      const y = d.getFullYear()
+      const m = (d.getMonth() + 1).toString().padStart(2, "0")
+      const day = d.getDate().toString().padStart(2, "0")
+      return `发布日期：${y}-${m}-${day}`
     }
   },
   onInit() {
     global.logger.log("[videodetail] load bvid: " + this.bvid)
+    // 清除字幕缓存，确保每次进入视频详情页都重新获取字幕
+    if (global.subtitleListCache) {
+      global.subtitleListCache = {}
+      global.logger.log("[videodetail] subtitleListCache cleared")
+    }
     this.GetVideoDetail()
     this.UpdateVideoToolbarStatus()
   },
@@ -109,30 +150,19 @@ export default {
       message: "该功能仍在开发中"
     })
   },
-  async OpenPlayer() {
-    const exists = await global.savedcontent.SavedContentManager.checkVideoAudioExists(this.bvid)
-    if (exists) {
-      const contents = await global.savedcontent.SavedContentManager.listAllContent()
-      const cachedItem = contents.find((ct) => ct.bvid === this.bvid && ct.type === 'videoAudio')
-      if (cachedItem) {
-        prompt.showToast({ message: '正在加载缓存...', duration: 1000 })
-        router.push({
-          uri: "pages/video/player",
-          params: {
-            bvid: this.bvid,
-            cachedAudioUri: cachedItem.fileUri,
-            cachedTitle: cachedItem.title,
-            cachedCoverUrl: cachedItem.coverUrl,
-            cachedAuthor: cachedItem.author
-          }
-        })
-        return
-      }
-    }
+  GoVideoContent() {
     router.push({
-      uri: "pages/video/player",
+      uri: "pages/video/videocontent",
       params: {
-        bvid: this.bvid
+        bvid: this.bvid,
+        aid: this.vid.aid,
+        title: this.currentPart ? `${this.vid.title} - ${this.currentPart}` : this.vid.title,
+        coverUrl: this.vid.pic,
+        author: this.vid.owner?.name || '',
+        cid: this.currentCid,
+        pageNum: this.currentPageNum,
+        pageIndex: this.currentPageIndex,
+        videoPart: this.currentPart
       }
     })
   },
@@ -147,6 +177,65 @@ export default {
   async GetVideoDetail() {
     this.vid = await global.biliclient.getVideoInfoByBVID(this.bvid)
     this.renderingCover = true
+    // 检测是否有章节（view_points）
+    const vps = this.vid.view_points
+    this.hasChapters = Array.isArray(vps) && vps.length > 0
+    // 分P处理
+    const pages = this.vid.pages
+    if (Array.isArray(pages) && pages.length > 1) {
+      this.hasPages = true
+      this.totalPages = pages.length
+      const firstPage = pages[0]
+      this.currentPageIndex = 0
+      this.currentPageNum = firstPage.page || 1
+      this.currentCid = firstPage.cid
+      this.currentPart = firstPage.part || ''
+    } else {
+      this.hasPages = false
+      this.totalPages = 1
+      this.currentPageIndex = 0
+      this.currentPageNum = 1
+      this.currentCid = this.vid.cid
+      this.currentPart = ''
+    }
+    global.logger.log(`[videodetail] pages: ${this.totalPages}, currentPage: ${this.currentPageNum}, cid: ${this.currentCid}`)
+  },
+  SelectPage(index) {
+    const pages = this.vid.pages
+    if (!Array.isArray(pages) || index < 0 || index >= pages.length) return
+    const p = pages[index]
+    this.currentPageIndex = index
+    this.currentPageNum = p.page || (index + 1)
+    this.currentCid = p.cid
+    this.currentPart = p.part || ''
+    prompt.showToast({ message: `已切换到 P${this.currentPageNum}：${this.currentPart}` })
+    // 章节信息可能绑定在主vid.cid上，所以GoChapters继续用this.vid.cid保持一致
+  },
+  FormatDuration(seconds) {
+    if (!seconds && seconds !== 0) return ''
+    const s = Math.floor(Number(seconds) || 0)
+    const h = Math.floor(s / 3600)
+    const m = Math.floor((s % 3600) / 60)
+    const sec = s % 60
+    function pad(n) { return n < 10 ? '0' + n : '' + n; }
+    if (h > 0) return `${h}:${pad(m)}:${pad(sec)}`
+    return `${m}:${pad(sec)}`
+  },
+  GoChapters() {
+    const vps = this.vid.view_points
+    if (!Array.isArray(vps) || vps.length === 0) {
+      prompt.showToast({ message: '该视频没有章节' })
+      return
+    }
+    router.push({
+      uri: "pages/video/chapters",
+      params: {
+        title: this.vid.title,
+        bvid: this.bvid,
+        cid: this.vid.cid,
+        chaptersJson: JSON.stringify(vps)
+      }
+    })
   },
   async UpdateVideoToolbarStatus() {
     this.stared = await global.biliclient.isVideoStaredByBVID(this.bvid)
@@ -269,9 +358,10 @@ export default {
       const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`
       
       // 构建视频介绍部分
-      let detailText = 
+      let detailText =
         `【视频介绍】\n` +
         `标题：${this.vid.title || '未知'}\n` +
+        `BV号：${this.bvid}\n` +
         `时长：${durationStr}\n` +
         `UP主：${this.vid.owner?.name || '未知'}\n\n` +
         `简介：\n${this.vid.desc || '暂无简介'}\n\n`
@@ -306,15 +396,6 @@ export default {
         message: "获取视频详情失败"
       })
     }
-  },
-  ShowSubtitle() {
-    router.push({
-      uri: "pages/video/subtitle",
-      params: {
-        bvid: this.bvid,
-        cid: this.vid.cid
-      }
-    })
   },
   async AddToFav() {
     let result
@@ -365,6 +446,15 @@ export default {
         type: 1,
         oid: this.vid.aid,
         replycount: this.vid.stat.reply
+      }
+    })
+  },
+  WatchOnPhone() {
+    router.push({
+      uri: "pages/video/watchonphone",
+      params: {
+        bvid: this.bvid,
+        title: this.vid.title || ''
       }
     })
   }

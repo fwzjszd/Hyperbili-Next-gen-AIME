@@ -24,7 +24,7 @@ export const BilibiliClientCommentMethods = {
     // 发送评论
     async GiveReply(this: any, type: string, oid: string, message: string) {
         const url = "https://api.bilibili.com/x/v2/reply/add";
-        const body = `type=${type}&oid=${oid}&message=${message}&plat=1&csrf=${this.biliJct}`;
+        const body = `type=${type}&oid=${oid}&message=${encodeURIComponent(message)}&plat=1&csrf=${this.biliJct}`;
         const response = await this.postRequest(url, body, "application/x-www-form-urlencoded");
         return response.data;
     },
@@ -32,7 +32,7 @@ export const BilibiliClientCommentMethods = {
     // 回复评论（发送二级评论）
     async GiveSecReply(this: any, type: string, oid: string, parent: string, message: string) {
         const url = "https://api.bilibili.com/x/v2/reply/add";
-        const body = `type=${type}&oid=${oid}&parent=${parent}&message=${message}&plat=1&csrf=${this.biliJct}`;
+        const body = `type=${type}&oid=${oid}&parent=${parent}&message=${encodeURIComponent(message)}&plat=1&csrf=${this.biliJct}`;
         const response = await this.postRequest(url, body, "application/x-www-form-urlencoded");
         return response.data;
     },
@@ -40,7 +40,7 @@ export const BilibiliClientCommentMethods = {
     // 回复二级评论（对话树）
     async GiveTreeReply(this: any, type: string, oid: string, parent: string, root: string, message: string) {
         const url = "https://api.bilibili.com/x/v2/reply/add";
-        const body = `type=${type}&oid=${oid}&parent=${parent}&root=${root}&message=${message}&plat=1&csrf=${this.biliJct}`;
+        const body = `type=${type}&oid=${oid}&parent=${parent}&root=${root}&message=${encodeURIComponent(message)}&plat=1&csrf=${this.biliJct}`;
         const response = await this.postRequest(url, body, "application/x-www-form-urlencoded");
         return response.data;
     },

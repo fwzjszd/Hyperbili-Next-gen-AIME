@@ -5,23 +5,19 @@
   <div class="page">
     <scroll class="scroll {{scrclass}}" scroll-y="true" bounces="true">
       <title-bar title="cleartmp.title"></title-bar>
-      <div class="storage_card">
-        <div class="storage_item">
-          <text class="storage_num">{{ totalStorageNum }}</text>
-          <text class="storage_unit">{{ totalStorageUnit }}</text>
-          <text class="storage_label">{{ $t("settings.totalStorage") }}</text>
+      <div class="storage-section">
+        <text class="storage-title">存储空间</text>
+        <div class="storage-row">
+          <text class="storage-label">总空间</text>
+          <text class="storage-value">{{storageTotal}}</text>
         </div>
-        <div class="storage_divider"></div>
-        <div class="storage_item">
-          <text class="storage_num">{{ usedStorageNum }}</text>
-          <text class="storage_unit">{{ usedStorageUnit }}</text>
-          <text class="storage_label">{{ $t("settings.usedStorage") }}</text>
+        <div class="storage-row">
+          <text class="storage-label">已用空间</text>
+          <text class="storage-value">{{storageUsed}}</text>
         </div>
-        <div class="storage_divider"></div>
-        <div class="storage_item">
-          <text class="storage_num">{{ availableStorageNum }}</text>
-          <text class="storage_unit">{{ availableStorageUnit }}</text>
-          <text class="storage_label">{{ $t("settings.availableStorage") }}</text>
+        <div class="storage-row">
+          <text class="storage-label">可用空间</text>
+          <text class="storage-value">{{storageAvailable}}</text>
         </div>
       </div>
       <text class="cleartip" style="margin-top: 10px">请先选择类别</text>
@@ -46,13 +42,15 @@
 
 <script>
 import prompt from "@system.prompt"
-import file from "@system.file"
 import device from "@system.device"
 import {asyncFile} from "../../../../../asyncapi/file"
 
 export default {
   private: {
     tmps: [],
+    storageTotal: '加载中...',
+    storageUsed: '加载中...',
+    storageAvailable: '加载中...',
     cantClear: true,
     clearControl: {
       imgs: false,
@@ -67,16 +65,6 @@ export default {
       videoAudio: "#434343",
       others: "#222222"
     },
-    storageInfoAvailable: false,
-    totalStorage: "-- MB",
-    usedStorage: "-- MB",
-    availableStorage: "-- MB",
-    totalStorageNum: "--",
-    totalStorageUnit: "MB",
-    usedStorageNum: "--",
-    usedStorageUnit: "MB",
-    availableStorageNum: "--",
-    availableStorageUnit: "MB",
     scrclass: ""
   },
   RefreshPage() {
@@ -201,146 +189,6 @@ export default {
   BytesToMB(bytes) {
     return (bytes / (1024 * 1024)).toFixed(2)
   },
-  FormatStorage(bytes) {
-    const mb = bytes / (1024 * 1024)
-    if (mb >= 1024) {
-      const gb = mb / 1024
-      return {
-        num: gb.toFixed(2),
-        unit: "GB"
-      }
-    } else {
-      return {
-        num: mb.toFixed(2),
-        unit: "MB"
-      }
-    }
-  },
-  GetStorageInfo() {
-    try {
-      global.logger.log("[ClearTmp] GetStorageInfo start")
-      global.logger.log("[ClearTmp] device module: ", typeof device)
-      global.logger.log("[ClearTmp] device.getTotalStorage: ", typeof device.getTotalStorage)
-      global.logger.log("[ClearTmp] device.getAvailableStorage: ", typeof device.getAvailableStorage)
-      
-      let totalSize = 0
-      let availableSize = 0
-      let gotTotal = false
-      let gotAvailable = false
-      
-      const updateStorageInfo = () => {
-        if (gotTotal && gotAvailable) {
-          global.logger.log("[ClearTmp] updateStorageInfo, total: " + totalSize + ", available: " + availableSize)
-          this.storageInfoAvailable = true
-          const usedSize = totalSize - availableSize
-          
-          // 总存储空间
-          const totalFormatted = this.FormatStorage(totalSize)
-          this.totalStorageNum = totalFormatted.num
-          this.totalStorageUnit = totalFormatted.unit
-          this.totalStorage = totalFormatted.num + " " + totalFormatted.unit
-          
-          // 已用存储空间
-          const usedFormatted = this.FormatStorage(usedSize)
-          this.usedStorageNum = usedFormatted.num
-          this.usedStorageUnit = usedFormatted.unit
-          this.usedStorage = usedFormatted.num + " " + usedFormatted.unit
-          
-          // 可用存储空间
-          const availableFormatted = this.FormatStorage(availableSize)
-          this.availableStorageNum = availableFormatted.num
-          this.availableStorageUnit = availableFormatted.unit
-          this.availableStorage = availableFormatted.num + " " + availableFormatted.unit
-        }
-      }
-      
-      // 尝试使用 device 模块的 API
-      if (device && device.getTotalStorage && device.getAvailableStorage) {
-        global.logger.log("[ClearTmp] Using device module API")
-        
-        device.getTotalStorage({
-          success: (data) => {
-            global.logger.log("[ClearTmp] getTotalStorage success: ", JSON.stringify(data))
-            totalSize = data.totalStorage || data.totalSize || 0
-            gotTotal = true
-            updateStorageInfo()
-          },
-          fail: (data, code) => {
-            global.logger.log("[ClearTmp] getTotalStorage fail, code = " + code + ", data = " + JSON.stringify(data))
-            // 尝试使用 file 模块作为备选
-            this.TryFileStorageAPI()
-          }
-        })
-        
-        device.getAvailableStorage({
-          success: (data) => {
-            global.logger.log("[ClearTmp] getAvailableStorage success: ", JSON.stringify(data))
-            availableSize = data.availableStorage || data.availableSize || 0
-            gotAvailable = true
-            updateStorageInfo()
-          },
-          fail: (data, code) => {
-            global.logger.log("[ClearTmp] getAvailableStorage fail, code = " + code + ", data = " + JSON.stringify(data))
-          }
-        })
-      } else {
-        global.logger.log("[ClearTmp] device module API not available, trying file module")
-        // device 模块 API 不存在，尝试使用 file 模块
-        this.TryFileStorageAPI()
-      }
-    } catch (e) {
-      global.logger.log("[ClearTmp] GetStorageInfo error: " + e.toString())
-      // 出错时保持显示 "--" 占位符
-    }
-  },
-  TryFileStorageAPI() {
-    try {
-      global.logger.log("[ClearTmp] TryFileStorageAPI start")
-      global.logger.log("[ClearTmp] file module: ", typeof file)
-      global.logger.log("[ClearTmp] file.getStorageInfo: ", typeof file.getStorageInfo)
-      
-      if (file && file.getStorageInfo) {
-        file.getStorageInfo({
-          success: (data) => {
-            global.logger.log("[ClearTmp] file.getStorageInfo success: ", JSON.stringify(data))
-            const totalSize = data.totalStorage || data.totalSize || 0
-            const availableSize = data.availableStorage || data.availableSize || 0
-            
-            if (totalSize > 0) {
-              this.storageInfoAvailable = true
-              const usedSize = totalSize - availableSize
-              
-              // 总存储空间
-              const totalFormatted = this.FormatStorage(totalSize)
-              this.totalStorageNum = totalFormatted.num
-              this.totalStorageUnit = totalFormatted.unit
-              this.totalStorage = totalFormatted.num + " " + totalFormatted.unit
-              
-              // 已用存储空间
-              const usedFormatted = this.FormatStorage(usedSize)
-              this.usedStorageNum = usedFormatted.num
-              this.usedStorageUnit = usedFormatted.unit
-              this.usedStorage = usedFormatted.num + " " + usedFormatted.unit
-              
-              // 可用存储空间
-              const availableFormatted = this.FormatStorage(availableSize)
-              this.availableStorageNum = availableFormatted.num
-              this.availableStorageUnit = availableFormatted.unit
-              this.availableStorage = availableFormatted.num + " " + availableFormatted.unit
-            }
-          },
-          fail: (data, code) => {
-            global.logger.log("[ClearTmp] file.getStorageInfo fail, code = " + code + ", data = " + JSON.stringify(data))
-            // 失败时保持显示 "--" 占位符
-          }
-        })
-      } else {
-        global.logger.log("[ClearTmp] file.getStorageInfo not available")
-      }
-    } catch (e) {
-      global.logger.log("[ClearTmp] TryFileStorageAPI error: " + e.toString())
-    }
-  },
   async getSavedContentList() {
     try {
       const contents = await global.savedcontent.SavedContentManager.listAllContent()
@@ -447,9 +295,59 @@ export default {
       global.logger.error("在扫描临时文件时出错：", e.toString())
     }
   },
+  loadStorageInfo() {
+    var self = this
+    var totalBytes = null
+    var availableBytes = null
+
+    device.getTotalStorage({
+      success: function(ret) {
+        totalBytes = parseInt(ret.totalStorage) || 0
+      },
+      fail: function() {
+        self.storageTotal = '获取失败'
+      }
+    })
+
+    device.getAvailableStorage({
+      success: function(ret) {
+        availableBytes = parseInt(ret.availableStorage) || 0
+      },
+      fail: function() {
+        self.storageAvailable = '获取失败'
+      }
+    })
+
+    // Vela 中 device API 回调可能同步执行，延迟赋值确保 VM 已就绪
+    setTimeout(function() {
+      if (totalBytes !== null) {
+        self.storageTotal = self.formatStorage(totalBytes)
+      } else {
+        self.storageTotal = 'N/A'
+      }
+      if (availableBytes !== null) {
+        self.storageAvailable = self.formatStorage(availableBytes)
+      } else {
+        self.storageAvailable = 'N/A'
+      }
+      if (totalBytes !== null && availableBytes !== null) {
+        self.storageUsed = self.formatStorage(totalBytes - availableBytes)
+      } else {
+        self.storageUsed = 'N/A'
+      }
+    }, 200)
+  },
+  formatStorage(bytes) {
+    if (!bytes && bytes !== 0) return 'N/A'
+    var mb = bytes / (1024 * 1024)
+    if (mb >= 1024) {
+      return (mb / 1024).toFixed(2) + ' GB'
+    }
+    return mb.toFixed(2) + ' MB'
+  },
   onInit() {
+    this.loadStorageInfo()
     this.ScanTemps()
-    this.GetStorageInfo()
   }
 }
 </script>

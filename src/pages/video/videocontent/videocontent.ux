@@ -1,0 +1,590 @@
+<import name="title-bar" src="@components/TitleBar/TitleBar.ux"></import>
+
+<template>
+  <div class="page">
+    <scroll class="scroll {{scrclass}}" scroll-y="true" bounces="true">
+      <title-bar title="视频内容"></title-bar>
+      <text class="vc-title">{{title}}</text>
+
+      <div class="vc-section" style="margin-top: 20px">
+        <div class="setbase" @click="OnSpriteClick()">
+          <image class="seticon" src="/common/vidtool_intro.png"></image>
+          <text class="setext_small">雪碧图查看</text>
+          <text class="status-text {{spriteCached ? 'status-cached' : 'status-uncached'}}">{{spriteCached ? '已缓存' : '未缓存'}}</text>
+        </div>
+
+        <div class="action-row" if="{{spriteCached}}">
+          <div class="action-btn action-view" @click="OpenSpriteViewer()">
+            <text class="action-btn-text">查看</text>
+          </div>
+          <div class="action-btn action-delete" @click="DeleteSprite()">
+            <text class="action-btn-text action-delete-text">删除</text>
+          </div>
+        </div>
+        <div class="action-row" else>
+          <div class="action-btn action-download" @click="DownloadSprite()">
+            <text class="action-btn-text">{{downloadingSprite ? '下载中...' : '下载'}}</text>
+          </div>
+        </div>
+      </div>
+
+      <div class="vc-section">
+        <div class="setbase" @click="OnAudioClick()">
+          <image class="seticon" src="/common/vidtool_generatemanifest.png"></image>
+          <text class="setext_small">音频播放</text>
+          <text class="status-text {{audioCached ? 'status-cached' : 'status-uncached'}}">{{audioCached ? '已缓存' : '未缓存'}}</text>
+        </div>
+        <div class="action-row" if="{{audioCached}}">
+          <div class="action-btn action-view" @click="OpenAudioPlayer()">
+            <text class="action-btn-text">播放</text>
+          </div>
+          <div class="action-btn action-delete" @click="DeleteAudio()">
+            <text class="action-btn-text action-delete-text">删除</text>
+          </div>
+        </div>
+        <div class="action-row" else>
+          <div class="action-btn action-download" @click="DownloadAudio()">
+            <text class="action-btn-text">{{downloadingAudio ? '下载中...' : '下载'}}</text>
+          </div>
+        </div>
+      </div>
+
+      <div class="vc-section">
+        <div class="setbase" @click="OpenSubtitleViewer()">
+          <image class="seticon" src="/common/vidtool_intro.png"></image>
+          <text class="setext_small">字幕查看</text>
+        </div>
+      </div>
+
+      <text style="margin-top: 30px"></text>
+    </scroll>
+
+    <!-- 下载进度弹窗 -->
+    <div class="dl-mask" if="{{showDownloadDialog}}">
+      <div class="dl-dialog">
+        <text class="dl-title">正在下载</text>
+        <text class="dl-progress">{{downloadProgressText}}</text>
+        <div class="dl-bar-bg">
+          <div class="dl-bar" style="width: {{downloadProgressPercent}}%"></div>
+        </div>
+        <text class="dl-tip">下载过程中请保持此界面，请勿退出</text>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import router from "@system.router"
+import prompt from "@system.prompt"
+import request from "@system.request"
+import brightness from "@system.brightness"
+import { asyncFile } from "../../../asyncapi/file"
+
+export default {
+  public: {
+    bvid: '',
+    aid: '',
+    title: '',
+    coverUrl: '',
+    author: '',
+    cid: null,
+    pageNum: 1,
+    pageIndex: 0,
+    videoPart: ''
+  },
+  private: {
+    spriteCached: false,
+    audioCached: false,
+    downloadingSprite: false,
+    downloadingAudio: false,
+    cachedSpriteId: '',
+    cachedAudioId: '',
+
+    showDownloadDialog: false,
+    downloadProgressText: '',
+    downloadProgressPercent: 0,
+
+    cacheKeySuffix: '',
+    scrclass: ""
+  },
+  async onInit() {
+    // 下载期间保持屏幕常亮
+    brightness.setKeepScreenOn({
+      keepScreenOn: true,
+      fail: function(data, code) {
+        global.logger.log("[videocontent] setKeepScreenOn failed: " + code)
+      }
+    })
+    this.cacheKeySuffix = this.pageNum && this.pageNum > 1 ? `_p${this.pageNum}` : ''
+    await this.CheckCacheStatus()
+  },
+  onDestroy() {
+    // 退出时关闭屏幕常亮
+    brightness.setKeepScreenOn({
+      keepScreenOn: false,
+      fail: function(data, code) {
+        global.logger.log("[videocontent] setKeepScreenOn(false) failed: " + code)
+      }
+    })
+  },
+  async CheckCacheStatus() {
+    try {
+      const audioExists = await global.savedcontent.SavedContentManager.checkVideoAudioExists(this.bvid + this.cacheKeySuffix)
+      this.audioCached = audioExists
+
+      const spriteExists = await global.savedcontent.SavedContentManager.checkVideoSpriteExists(this.bvid + this.cacheKeySuffix)
+      this.spriteCached = spriteExists
+
+      const contents = await global.savedcontent.SavedContentManager.listAllContent()
+      const audioItem = contents.find((ct) => ct.bvid === this.bvid + this.cacheKeySuffix && ct.type === 'videoAudio')
+      if (audioItem) this.cachedAudioId = audioItem.id
+      const spriteItem = contents.find((ct) => ct.bvid === this.bvid + this.cacheKeySuffix && ct.type === 'videoSprite')
+      if (spriteItem) this.cachedSpriteId = spriteItem.id
+    } catch (e) {
+      global.logger.error("[videocontent] CheckCacheStatus Error: " + e.toString())
+    }
+  },
+  OnSpriteClick() {
+    if (this.spriteCached) {
+      this.OpenSpriteViewer()
+    } else {
+      this.DownloadSprite()
+    }
+  },
+  async DownloadSprite() {
+    if (this.downloadingSprite) return
+    this.downloadingSprite = true
+    this.showDownloadDialog = true
+    this.downloadProgressText = '正在获取雪碧图数据...'
+    this.downloadProgressPercent = 5
+
+    const maxRetries = 3
+    let frameData = null
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        this.downloadProgressText = '正在获取雪碧图数据...'
+        frameData = await global.biliclient.getVideoFramesByAID(this.aid, 60)
+        if (frameData && frameData.image && frameData.image.length > 0) break
+        frameData = null
+      } catch (e) {
+        global.logger.error("[videocontent] getVideoFramesByAID attempt " + (attempt + 1) + " Error: " + e.toString())
+      }
+      if (attempt < maxRetries - 1) {
+        this.downloadProgressText = '获取失败，重试中(' + (attempt + 2) + '/' + maxRetries + ')...'
+      }
+    }
+
+    if (!frameData || !frameData.image || frameData.image.length === 0) {
+      this.showDownloadDialog = false
+      prompt.showToast({ message: '该视频没有可用的雪碧图' })
+      this.downloadingSprite = false
+      return
+    }
+
+    try {
+      const images = frameData.image
+      const localImages = []
+      for (let i = 0; i < images.length; i++) {
+        let url = images[i]
+        if (url.startsWith('//')) url = 'https:' + url
+
+        this.downloadProgressText = '下载雪碧图 ' + (i + 1) + '/' + images.length
+        this.downloadProgressPercent = Math.floor(10 + (i / images.length) * 80)
+
+        let localUri = null
+        for (let retry = 0; retry < maxRetries; retry++) {
+          localUri = await this.downloadImage(url, this.bvid + '_sprite_' + i + '.jpg')
+          if (localUri) break
+          if (retry < maxRetries - 1) {
+            this.downloadProgressText = '图片' + (i + 1) + '下载失败，重试中...'
+          }
+        }
+        if (localUri) {
+          localImages.push(localUri)
+        } else {
+          localImages.push(url)
+        }
+      }
+
+      frameData.image = localImages
+
+      const spriteJson = JSON.stringify({
+        frameData,
+        frameCount: 60
+      })
+
+      this.downloadProgressText = '正在保存缓存...'
+      this.downloadProgressPercent = 95
+
+      const id = await global.savedcontent.SavedContentManager.storeVideoSprite(
+        this.title + ' [雪碧图]',
+        spriteJson,
+        this.bvid + this.cacheKeySuffix
+      )
+
+      this.cachedSpriteId = id
+      this.spriteCached = true
+      this.downloadProgressPercent = 100
+      this.showDownloadDialog = false
+      prompt.showToast({ message: '雪碧图缓存成功' })
+    } catch (e) {
+      global.logger.error("[videocontent] DownloadSprite Error: " + e.toString())
+      this.showDownloadDialog = false
+      prompt.showToast({ message: '下载雪碧图失败' })
+    }
+    this.downloadingSprite = false
+  },
+  OpenSpriteViewer() {
+    router.push({
+      uri: "pages/video/spriteviewer",
+      params: {
+        title: this.title,
+        cachedSpriteId: this.cachedSpriteId
+      }
+    })
+  },
+  async DeleteSprite() {
+    if (!this.cachedSpriteId) return
+    prompt.showDialog({
+      message: '确定要删除已缓存的雪碧图吗？',
+      success: async () => {
+        await global.savedcontent.SavedContentManager.deleteContent(this.cachedSpriteId)
+        this.spriteCached = false
+        this.cachedSpriteId = ''
+        prompt.showToast({ message: '已删除雪碧图缓存' })
+      }
+    })
+  },
+  OnAudioClick() {
+    if (this.audioCached) {
+      this.OpenAudioPlayer()
+    } else {
+      this.DownloadAudio()
+    }
+  },
+  downloadImage(url, filename) {
+    return new Promise((resolve) => {
+      request.download({
+        url,
+        filename,
+        success: function(res) {
+          request.onDownloadComplete({
+            token: res.token,
+            success: function(result) {
+              resolve(result.uri)
+            },
+            fail: function() {
+              resolve(null)
+            }
+          })
+        },
+        fail: function() {
+          resolve(null)
+        }
+      })
+    })
+  },
+  async DownloadAudio() {
+    if (this.downloadingAudio) return
+    this.downloadingAudio = true
+    this.showDownloadDialog = true
+    this.downloadProgressText = '正在获取音频地址...'
+    this.downloadProgressPercent = 5
+
+    try {
+      // 优先用传入的cid（对应选中的分P），没有才fallback到按bvid找默认P1 cid
+      let audioUrl
+      if (this.cid) {
+        audioUrl = await global.biliclient.getVideoBestAudioUrlByCid(this.bvid, this.cid)
+      } else {
+        audioUrl = await global.biliclient.getVideoBestAudioUrlByBVID(this.bvid)
+      }
+      if (!audioUrl) {
+        this.showDownloadDialog = false
+        prompt.showToast({ message: '获取音频地址失败' })
+        this.downloadingAudio = false
+        return
+      }
+
+      this.downloadProgressText = '正在下载音频...'
+      this.downloadProgressPercent = 15
+
+      const filename = `${this.bvid}_audio.m4s`
+      const that = this
+
+      request.download({
+        url: audioUrl,
+        header: JSON.stringify({
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Referer': 'https://www.bilibili.com',
+          'Range': 'bytes=0-'
+        }),
+        filename,
+        success: function(res) {
+          request.onDownloadComplete({
+            token: res.token,
+            success: async function(result) {
+              try {
+                that.downloadProgressText = '正在保存音频...'
+                that.downloadProgressPercent = 90
+                await global.savedcontent.SavedContentManager.storeVideoAudio(
+                  that.title,
+                  result.uri,
+                  that.coverUrl,
+                  that.author,
+                  that.bvid + that.cacheKeySuffix
+                )
+                const contents = await global.savedcontent.SavedContentManager.listAllContent()
+                const audioItem = contents.find((ct) => ct.bvid === that.bvid + that.cacheKeySuffix && ct.type === 'videoAudio')
+                if (audioItem) that.cachedAudioId = audioItem.id
+                that.audioCached = true
+                that.downloadProgressPercent = 100
+                that.showDownloadDialog = false
+                prompt.showToast({ message: '音频缓存成功' })
+              } catch (e) {
+                global.logger.error("[videocontent] storeAudio Error: " + e.toString())
+                that.showDownloadDialog = false
+                prompt.showToast({ message: '保存音频缓存失败' })
+              }
+              that.downloadingAudio = false
+            },
+            fail: function(error) {
+              that.showDownloadDialog = false
+              prompt.showToast({ message: '音频下载失败' })
+              that.downloadingAudio = false
+            }
+          })
+        },
+        fail: function(error) {
+          that.showDownloadDialog = false
+          prompt.showToast({ message: '音频下载任务创建失败' })
+          that.downloadingAudio = false
+        }
+      })
+    } catch (e) {
+      global.logger.error("[videocontent] DownloadAudio Error: " + e.toString())
+      this.showDownloadDialog = false
+      prompt.showToast({ message: '下载音频失败' })
+      this.downloadingAudio = false
+    }
+  },
+  async OpenAudioPlayer() {
+    const contents = await global.savedcontent.SavedContentManager.listAllContent()
+    const audioItem = contents.find((ct) => ct.bvid === this.bvid + this.cacheKeySuffix && ct.type === 'videoAudio')
+    if (!audioItem) {
+      prompt.showToast({ message: '缓存数据不存在' })
+      return
+    }
+    router.push({
+      uri: "pages/video/player",
+      params: {
+        bvid: this.bvid,
+        cachedAudioUri: audioItem.fileUri,
+        cachedTitle: this.title,
+        cachedCoverUrl: this.coverUrl,
+        cachedAuthor: this.author,
+        videoCid: this.cid,
+        pageNum: this.pageNum,
+        videoPart: this.videoPart
+      }
+    })
+  },
+  async DeleteAudio() {
+    if (!this.cachedAudioId) return
+    prompt.showDialog({
+      message: '确定要删除已缓存的音频吗？',
+      success: async () => {
+        await global.savedcontent.SavedContentManager.deleteContent(this.cachedAudioId)
+        this.audioCached = false
+        this.cachedAudioId = ''
+        prompt.showToast({ message: '已删除音频缓存' })
+      }
+    })
+  },
+  OpenSubtitleViewer() {
+    router.push({
+      uri: "pages/video/subtitleviewer",
+      params: {
+        bvid: this.bvid,
+        cid: this.cid,
+        title: this.title
+      }
+    })
+  }
+}
+</script>
+
+<style lang="less">
+@import '@less/global.less';
+
+.vc-title {
+  font-size: 22px;
+  font-weight: 600;
+  color: #ffffff;
+  margin-top: 15px;
+  width: 320px;
+  text-align: center;
+  lines: 2;
+  text-overflow: ellipsis;
+}
+
+.vc-section {
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  margin-top: 10px;
+}
+
+.setbase {
+  width: 370px;
+  height: 92px;
+  border-radius: 30px;
+  background-color: #262626;
+  align-items: center;
+  flex-direction: row;
+  position: relative;
+}
+
+.seticon {
+  margin-left: 25px;
+  width: 55px;
+  height: 55px;
+  object-fit: scale-down;
+}
+
+.setext_small {
+  font-size: 30px;
+  font-weight: 600;
+  margin-left: 15px;
+}
+
+.status-text {
+  position: absolute;
+  right: 20px;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.status-cached {
+  color: #4CAF50;
+}
+
+.status-uncached {
+  color: #9e9e9e;
+}
+
+.action-row {
+  flex-direction: row;
+  margin-top: 8px;
+  margin-bottom: 5px;
+}
+
+.action-btn {
+  width: 110px;
+  height: 56px;
+  border-radius: 20px;
+  justify-content: center;
+  align-items: center;
+  margin-left: 10px;
+}
+
+.action-download {
+  background-color: #FB7299;
+}
+
+.action-view {
+  background-color: #FB7299;
+}
+
+.action-delete {
+  background-color: #333333;
+}
+
+.action-btn-text {
+  font-size: 24px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.action-delete-text {
+  color: #FF6B6B;
+}
+
+.sel-btn {
+  width: 60px;
+  height: 50px;
+  border-radius: 16px;
+  background-color: #333333;
+  justify-content: center;
+  align-items: center;
+  margin-left: 8px;
+}
+
+.sel-active {
+  background-color: #FB7299;
+}
+
+.sel-btn-text {
+  font-size: 24px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.dl-mask {
+  position: absolute;
+  left: 0px;
+  top: 0px;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  justify-content: center;
+  align-items: center;
+}
+
+.dl-dialog {
+  flex-direction: column;
+  align-items: center;
+  width: 320px;
+  border-radius: 20px;
+  background-color: #262626;
+  padding-top: 25px;
+  padding-bottom: 25px;
+}
+
+.dl-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.dl-progress {
+  font-size: 22px;
+  color: #FB7299;
+  margin-top: 12px;
+  text-align: center;
+  lines: 2;
+  text-overflow: ellipsis;
+}
+
+.dl-bar-bg {
+  margin-top: 15px;
+  width: 250px;
+  height: 10px;
+  border-radius: 5px;
+  background-color: #333333;
+  overflow: hidden;
+}
+
+.dl-bar {
+  height: 10px;
+  border-radius: 5px;
+  background-color: #FB7299;
+}
+
+.dl-tip {
+  font-size: 16px;
+  color: #9e9e9e;
+  margin-top: 15px;
+  text-align: center;
+}
+</style>

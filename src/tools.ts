@@ -1,4 +1,4 @@
-import { device, network, router } from "./tsimports"
+import { device, network } from "./tsimports"
 
 export function formatNumber(num: number): string {
     if (num < 1000) {
@@ -46,10 +46,6 @@ export function getDeviceSerial(): Promise<any> {
                 resolve(data.serial);
             },
             fail: (error) => {
-                router.clear();
-                router.replace({
-                    uri: "pages/error/permissionerror"
-                });
                 reject(error);
             }
         });

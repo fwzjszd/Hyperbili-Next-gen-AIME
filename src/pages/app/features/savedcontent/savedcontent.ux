@@ -21,6 +21,15 @@
             <text class="video-audio-author">{{$item.author}}</text>
           </div>
         </div>
+        <div if="{{$item.type == 'videoSprite' ? true : false}}"
+          class="video-audio-item"
+          onclick="OpenSpriteViewer($item)" static>
+          <image class="video-audio-cover" src="{{$item.coverUrl}}"></image>
+          <div class="video-audio-info">
+            <text class="video-audio-title">{{$item.title}}</text>
+            <text class="video-audio-author">雪碧图</text>
+          </div>
+        </div>
       </div>
       <text class="bottom-spacer" static></text>
     </scroll>
@@ -67,6 +76,15 @@ export default {
         cachedTitle: item.title,
         cachedCoverUrl: item.coverUrl,
         cachedAuthor: item.author
+      }
+    })
+  },
+  OpenSpriteViewer(item) {
+    router.push({
+      uri: "pages/video/spriteviewer",
+      params: {
+        title: item.title,
+        cachedSpriteId: item.id
       }
     })
   },

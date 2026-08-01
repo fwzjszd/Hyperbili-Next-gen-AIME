@@ -1,8 +1,8 @@
 {
-    "package": "com.searchstars.hyperbilibili.dev",
+    "package": "com.fwzjszd.hyperbilibili.dev",
     "name": "澎湃哔哩",
-    "versionName": "2.5.1next-gen AIME",
-    "versionCode": 2,
+    "versionName": "2.5.3",
+    "versionCode": 5,
     "minPlatformVersion": 1000,
     "icon": "/common/logoDEV.png",
     "deviceTypeList": [
@@ -47,6 +47,14 @@
         },
         {
             "name": "system.network"
+        },
+        {
+            "name": "system.brightness"
+        }
+    ],
+    "permissions": [
+        {
+            "name": "hapjs.permission.DEVICE_INFO"
         }
     ],
     "config": {
@@ -77,23 +85,35 @@
             "pages/video/videodetail": {
                 "component": "videodetail"
             },
-            "pages/video/subtitle": {
-                "component": "subtitle"
-            },
             "pages/video/player": {
                 "component": "player"
             },
+            "pages/video/videocontent": {
+                "component": "videocontent"
+            },
+            "pages/video/spriteviewer": {
+                "component": "spriteviewer"
+            },
+            "pages/video/chapters": {
+                "component": "chapters"
+            },
+            "pages/video/subtitleviewer": {
+                "component": "subtitleviewer"
+            },
+            "pages/video/watchonphone": {
+                "component": "watchonphone"
+            },
             "pages/app/arealist": {
                 "component": "arealist"
-            },
-            "pages/video/subtitle": {
-                "component": "subtitle"
             },
             "pages/app/features/settings": {
                 "component": "settings"
             },
             "pages/app/features/settings/about": {
                 "component": "about"
+            },
+            "pages/app/features/settings/about/deviceinfo": {
+                "component": "deviceinfo"
             },
             "pages/app/features/mypage": {
                 "component": "mypage"
@@ -139,6 +159,9 @@
             },
             "pages/tools/picturedetail": {
                 "component": "picturedetail"
+            },
+            "pages/tools/imagegallery": {
+                "component": "imagegallery"
             },
             "pages/app/features/settings/donation": {
                 "component": "donation"
@@ -196,9 +219,6 @@
             },
             "pages/app/features/settings/cleartmp": {
                 "component": "cleartmp"
-            },
-            "pages/app/features/settings/storage": {
-                "component": "storage"
             }
         }
     }

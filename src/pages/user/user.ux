@@ -31,7 +31,8 @@
           <text class="desctxt gs">></text>
         </div>
       </div>
-      <default-button @click="GoDMPage" if="{{loaded}}" margin-top="25px" primary="true" text="user.senddm"></default-button>
+      <default-button @click="FollowClick" if="{{loaded}}" margin-top="25px" primary="{{isFollowing}}" text="{{followBtnText}}"></default-button>
+      <default-button @click="GoDMPage" if="{{loaded}}" margin-top="10px" primary="true" text="user.senddm"></default-button>
       <text style="margin-top: 30px"></text>
     </scroll>
     <image style="position: absolute; margin-top: 245px" if="{{anims.show_loading}}" src="{{anims.loading_src.value}}"></image>
@@ -56,6 +57,8 @@ export default {
       show_loading: false
     },
     loaded: false,
+    isFollowing: false,
+    followBtnText: "+ 关注",
     scrclass: ""
   },
   async LoadUserInfo(){
@@ -70,6 +73,7 @@ export default {
     this.anims.loading.stop()
     this.anims.show_loading = false
     this.loaded = true
+    this.LoadRelation()
   },
   GoUserVideos(){
     router.push({
@@ -97,6 +101,69 @@ export default {
         targetPic: this.user.face
       }
     })
+  },
+  async LoadRelation(){
+    try {
+      const relation = await global.biliclient.getUserRelationByUID(this.uid)
+      // attribute: 0=未关注, 1=普通关注, 2=特别关注
+      this.isFollowing = relation && (relation.attribute === 1 || relation.attribute === 2)
+      this.followBtnText = this.isFollowing ? "已关注" : "+ 关注"
+    } catch (e) {
+      global.logger.error("[user] LoadRelation error: " + e.toString())
+      // 加载失败时默认未关注，但避免重复关注报错
+      this.isFollowing = false
+      this.followBtnText = "+ 关注"
+    }
+  },
+  async FollowClick(){
+    try {
+      // 点击前重新检测一次关注状态，防止状态不同步
+      try {
+        const relation = await global.biliclient.getUserRelationByUID(this.uid)
+        const actuallyFollowing = relation && (relation.attribute === 1 || relation.attribute === 2)
+        if (actuallyFollowing !== this.isFollowing) {
+          this.isFollowing = actuallyFollowing
+          this.followBtnText = this.isFollowing ? "已关注" : "+ 关注"
+        }
+      } catch (e) {
+        global.logger.error("[user] FollowClick recheck error: " + e.toString())
+      }
+
+      let result
+      if (this.isFollowing) {
+        result = await global.biliclient.unfollowUser(this.uid)
+        if (result.code === 0) {
+          this.isFollowing = false
+          this.followBtnText = "+ 关注"
+          prompt.showToast({ message: "已取消关注" })
+        } else {
+          prompt.showToast({
+            message: `操作失败，错误代码：${result.code}`,
+            duration: 3000
+          })
+        }
+      } else {
+        result = await global.biliclient.followUser(this.uid)
+        if (result.code === 0) {
+          this.isFollowing = true
+          this.followBtnText = "已关注"
+          prompt.showToast({ message: "关注成功" })
+        } else if (result.code === 22013) {
+          // 已经关注该用户
+          this.isFollowing = true
+          this.followBtnText = "已关注"
+          prompt.showToast({ message: "已关注该用户" })
+        } else {
+          prompt.showToast({
+            message: `操作失败，错误代码：${result.code}`,
+            duration: 3000
+          })
+        }
+      }
+    } catch (e) {
+      global.logger.error("[user] FollowClick error: " + e.toString())
+      prompt.showToast({ message: "操作失败，请重试" })
+    }
   },
   WIPTips(){
     prompt.showToast({

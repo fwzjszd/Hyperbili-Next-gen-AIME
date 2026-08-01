@@ -40,13 +40,27 @@ export function Init(){
 export function InitPage(vm){
     GlobalActions.UpdateCurrentPageName()
     GlobalActions.AddToVmPool(vm)
-    GlobalActions.ClearCurrentVmSrcClass()
+
+    // 根据动画设置决定是否应用入场动画
+    const animationMode = global.settings?.SETTINGS?.enableFullAnimation || '关闭'
+    if (animationMode === '完整') {
+        global.vmPool[global.currentPageName].scrclass = "scroll-withanim"
+    } else {
+        GlobalActions.ClearCurrentVmSrcClass()
+    }
+
     global.logger.log("[ui.InitPage] vm set successed. name=", global.currentPageName)
 }
 
 export function OnBackPressTriggered(){
     GlobalActions.UpdateCurrentPageName()
-    global.vmPool[global.currentPageName].scrclass = "scroll-backanim"
+    const animationMode = global.settings?.SETTINGS?.enableFullAnimation || '关闭'
+
+    // 只有"开启"和"完整"档位才应用返回动画
+    if (animationMode === '开启' || animationMode === '完整') {
+        global.vmPool[global.currentPageName].scrclass = "scroll-backanim"
+    }
+
     setTimeout(() => {
         GlobalActions.ClearCurrentVmSrcClass()
         router.back()
@@ -54,7 +68,11 @@ export function OnBackPressTriggered(){
         var pageStack = router.getPages()
         var lastPageName = pageStack[pageStack.length - 2].name
         global.logger.log("lastpage=", lastPageName, "currentPage=", global.currentPageName)
-        global.vmPool[lastPageName].scrclass = ""
-        global.vmPool[lastPageName].scrclass = "scroll-frombackanim"
-    }, 150)
+
+        // 只有"开启"和"完整"档位才应用从后台返回动画
+        if (animationMode === '开启' || animationMode === '完整') {
+            global.vmPool[lastPageName].scrclass = ""
+            global.vmPool[lastPageName].scrclass = "scroll-frombackanim"
+        }
+    }, animationMode === '关闭' ? 50 : 150)
 }

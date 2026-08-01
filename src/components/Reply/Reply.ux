@@ -19,10 +19,11 @@
     </div>
     <div if="{{showCommentImages && reply.content.pictures && reply.content.pictures.length > 0}}" 
          class="reply_image_container"
-         onclick="OpenImage(reply.content.pictures[0].img_src)">
+         onclick="OpenImageGallery(reply.content.pictures)">
       <image class="reply_image" 
              src="{{reply.content.pictures[0].img_src}}@100w_100h" 
              alt="/common/fullgray.png"></image>
+      <text class="reply_image_count" if="{{reply.content.pictures.length > 1}}">共{{reply.content.pictures.length}}张图</text>
     </div>
     <div class="bottom_bar">
       <div class="reply_replybtn" onclick="Reply(reply.rpid)">
@@ -67,10 +68,11 @@ export default {
       rpid: rpid
     })
   },
-  OpenImage(imgSrc) {
+  OpenImageGallery(pictures) {
+    const imageList = pictures.map((p) => p.img_src)
     router.push({
-      uri: "pages/tools/picturedetail",
-      params: { img_uri: imgSrc }
+      uri: "pages/tools/imagegallery",
+      params: { images: JSON.stringify(imageList) }
     })
   }
 }
@@ -129,13 +131,22 @@ export default {
 .reply_image_container {
   margin-left: 33px;
   margin-top: 5px;
+  margin-bottom: 5px;
+  flex-direction: row;
+  align-items: center;
 }
 
 .reply_image {
-  width: 60px;
-  height: 60px;
+  width: 70px;
+  height: 70px;
   border-radius: 8px;
-  object-fit: contain;
+  object-fit: cover;
+}
+
+.reply_image_count {
+  font-size: 14px;
+  color: #888888;
+  margin-left: 8px;
 }
 
 .reply_replybtn {

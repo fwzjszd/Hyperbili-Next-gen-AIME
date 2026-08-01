@@ -46,7 +46,7 @@
       </div>
     </div>
     <!-- 主播放器内容 -->
-    <swiper if="{{ !showCacheTips }}" class="swiper-container" indicator="false" index="1" loop="false">
+    <swiper if="{{ !showCacheTips }}" class="swiper-container" indicator="false" index="{{ swiperIndex }}" loop="false" @change="onSwiperChange">
       <!-- 功能栏页面（新播放器样式） -->
       <stack class="swiper-page" if="{{ newPlayerStyle }}">
       <div class="features-page">
@@ -110,12 +110,19 @@
         </div>
       </div>
     </stack>
-    <!-- 歌词页面 -->
-    <!--
+    <!-- 字幕/歌词页面 -->
     <stack class="swiper-page">
       <div class="lyric-page">
         <image class="background-image" src="{{ getImageUrl(currSong.al.picUrl) }}" oncomplete="onImageLoad"></image>
         <div class="applemusic-lyric-container">
+          <!-- 顶部状态栏：字幕加载状态 -->
+          <div class="lyric-status-bar">
+            <text class="lyric-status-loading" if="{{ videoMode && subtitleLoading }}">字幕加载中...</text>
+            <text class="lyric-status-ok" if="{{ videoMode && !subtitleLoading && subtitleLoaded && lyricLines.length > 1 }}">已加载 {{ lyricLines.length }} 条</text>
+            <div class="lyric-status-refresh-btn" if="{{ videoMode }}" onclick="RefreshSubtitles">
+              <text class="lyric-status-refresh-text">⟳</text>
+            </div>
+          </div>
           <scroll class="applemusic-lyric-scroll" scroll-y="true" scroll-top="{{lyricScrollTop}}" id="appleMusicLyricScroll">
             <div class="applemusic-lyric-list">
               <div for="{{ (index, line) in lyricLines }}" id="applemusic-lyric-{{index}}">
@@ -127,7 +134,6 @@
         </div>
       </div>
     </stack>
-    -->
   </swiper>
   </stack>
 </template>
@@ -137,9 +143,10 @@
   import storage from "@system.storage";
   import prompt from "@system.prompt";
   import request from "@system.request";
+  import brightness from "@system.brightness";
   import { asyncFile } from "../../../asyncapi/file";
   export default {
-    props: { playlistId: { default: null }, startIndex: { default: 0 }, tracks: { default: null }, bvid: { default: null }, cachedAudioUri: { default: null }, cachedTitle: { default: null }, cachedCoverUrl: { default: null }, cachedAuthor: { default: null } },
+    props: { playlistId: { default: null }, startIndex: { default: 0 }, tracks: { default: null }, bvid: { default: null }, cachedAudioUri: { default: null }, cachedTitle: { default: null }, cachedCoverUrl: { default: null }, cachedAuthor: { default: null }, startTime: { default: 0 }, videoCid: { default: null } },
     data: {
       index: 0,
       songList: [],
@@ -172,12 +179,110 @@
       showAdjustVolume: false,
       volumePercent: 50,
       rememberCacheTips: false,
-      cachedCoverUri: null
+      cachedCoverUri: null,
+      pendingStartTime: 0,
+      subtitles: [],
+      subtitleLoaded: false,
+      subtitleLoading: false,
+      swiperIndex: 1,
+      enableVideoSubtitle: true
     },
     getImageUrl(picUrl) {
       if (!picUrl) return '/common/icon/default_album.png';
       if (picUrl.startsWith('internal://files/')) return picUrl;
       return picUrl + '@319w_150h';
+    },
+    // 根据与当前高亮行的距离计算字幕透明度（Apple Music 风格渐隐效果）
+    calculateLyricOpacity(index) {
+      const that = this;
+      const currentIdx = that.currentLyricIndex;
+      if (currentIdx < 0) return 0.6;
+      const diff = Math.abs(index - currentIdx);
+      if (diff === 0) return 1.0;
+      if (diff === 1) return 0.7;
+      if (diff === 2) return 0.4;
+      return 0.2;
+    },
+    // 加载视频字幕（直接获取并显示，自动选择中文字幕）
+    loadVideoSubtitles() {
+      const that = this;
+      const requestId = that.currentRequestId;
+      that.subtitleLoading = true;
+      that.subtitleLoaded = false;
+      if (!that.videoBvid) {
+        that.subtitleLoading = false;
+        return;
+      }
+
+      const fetchSubtitles = async () => {
+        try {
+          let cid = that.videoCid;
+          if (!cid) {
+            const info = await global.biliclient.getVideoInfoByBVID(that.videoBvid);
+            cid = info.cid || (info.pages && info.pages[0] && info.pages[0].cid);
+            that.videoCid = cid;
+          }
+          if (!cid) {
+            that.subtitleLoading = false;
+            return;
+          }
+          const subBody = await global.biliclient.getVideoSubtitles(that.videoBvid, cid);
+          if (requestId !== that.currentRequestId) return;
+          if (!subBody || subBody.length === 0) {
+            that.lyricLines = [{ text: '暂无字幕' }];
+            that.currentLyricIndex = 0;
+            that.subtitleLoading = false;
+            return;
+          }
+          var lines = subBody.map(function(item) {
+            return { time: item.from, text: item.content };
+          });
+          that.subtitles = subBody;
+          that.lyricLines = lines;
+          that.currentLyricIndex = -1;
+          that.subtitleLoaded = true;
+          that.subtitleLoading = false;
+          global.logger.log("[player loadVideoSubtitles] success, lines=" + lines.length);
+        } catch (e) {
+          global.logger.error("[player loadVideoSubtitles] error: " + (e && e.message ? e.message : e));
+          that.lyricLines = [{ text: '字幕加载失败' }];
+          that.currentLyricIndex = 0;
+          that.subtitleLoading = false;
+        }
+      };
+      fetchSubtitles();
+    },
+    // 手动清除字幕缓存并重新加载
+    RefreshSubtitles() {
+      const that = this;
+      global.logger.log("[player RefreshSubtitles] manual refresh triggered");
+      // 清除字幕缓存
+      if (global.subtitleListCache) {
+        global.subtitleListCache = {};
+      }
+      // 增加请求序号，取消正在进行的旧请求
+      that.currentRequestId = Date.now() + '_' + Math.random();
+      // 重置状态
+      that.lyricLines = [{ text: '字幕加载中...' }];
+      that.currentLyricIndex = -1;
+      that.subtitles = [];
+      that.subtitleLoaded = false;
+      that.subtitleLoading = false;
+      // 重新加载
+      that.loadVideoSubtitles();
+    },
+    // swiper 切换事件：左滑进入字幕页时才按需加载字幕
+    onSwiperChange(e) {
+      const that = this;
+      let idx = e && e.index !== undefined ? e.index : e;
+      if (typeof idx === 'object') idx = idx.index;
+      const subtitlePageIndex = that.newPlayerStyle ? 2 : 1;
+      if (that.videoMode && that.enableVideoSubtitle && idx === subtitlePageIndex) {
+        if (!that.subtitleLoaded && !that.subtitleLoading) {
+          global.logger.log("[player onSwiperChange] swiped to subtitle page, load subtitles now");
+          that.loadVideoSubtitles();
+        }
+      }
     },
     getCoverImageUrl(picUrl) {
       if (!picUrl) return '/common/icon/default_album.png';
@@ -339,6 +444,18 @@
       const that = this;
       that.isPlaying = false;
       that.playerState.isPlaying = false;
+      // 读取字幕设置
+      that.enableVideoSubtitle = global.settings.SETTINGS.enableVideoSubtitle !== false;
+      that.lyricOffset = global.settings.SETTINGS.subtitleSyncOffset !== undefined ? global.settings.SETTINGS.subtitleSyncOffset : 0.3;
+      // 确保 swiper 默认显示播放页（非字幕页）
+      // newPlayerStyle 时 swiper 有3页：功能栏(0)/播放(1)/字幕(2)，index=1
+      // 非 newPlayerStyle 时 swiper 有2页：播放(0)/字幕(1)，index=0
+      that.swiperIndex = that.newPlayerStyle ? 1 : 0;
+      // 接收从父页面传入的分P cid（优先使用）
+      if (that.videoCid) {
+        // props.videoCid -> data.videoCid 同名复制
+        that.videoCid = that.videoCid;
+      }
       if (that.cachedAudioUri && that.cachedTitle) {
         that.videoMode = true;
         that.videoBvid = that.bvid;
@@ -346,7 +463,8 @@
         that.startIndex = 0;
         that.tracks = null;
         that.showCacheTips = false;
-       
+        that.pendingStartTime = Number(that.startTime) || 0;
+
         that.songList = [{
           id: that.bvid,
           name: that.cachedTitle,
@@ -356,7 +474,7 @@
         }];
         that.currSong = that.songList[0];
         that.index = 0;
-       
+
         that.playCurrentSong();
         return;
       }
@@ -366,6 +484,7 @@
         that.playlistId = `video_bvid_${that.bvid}`;
         that.startIndex = 0;
         that.tracks = null;
+        that.pendingStartTime = Number(that.startTime) || 0;
        
         storage.get({
           key: 'skipCacheTips',
@@ -520,6 +639,15 @@
     onShow() {
       const that = this;
       that.loadLyricSettings();
+      // 视频模式下保持屏幕常亮，方便看字幕
+      if (that.videoMode) {
+        brightness.setKeepScreenOn({
+          keepScreenOn: true,
+          fail: function(data, code) {
+            global.logger.log("[player] setKeepScreenOn failed: " + code);
+          }
+        });
+      }
       const hasNewPlaylist = that.playlistId && !(that.fromAppStart || false);
       if (hasNewPlaylist) {
         that.index = that.startIndex || 0;
@@ -548,6 +676,13 @@
     },
     onHide() {
       const that = this;
+      // 退出播放器时关闭屏幕常亮
+      brightness.setKeepScreenOn({
+        keepScreenOn: false,
+        fail: function(data, code) {
+          global.logger.log("[player] setKeepScreenOn(false) failed: " + code);
+        }
+      });
       if (!that.currSong && that.songList && that.songList.length > 0 && that.index >= 0) {
         that.currSong = that.songList[that.index];
       }
@@ -681,11 +816,29 @@
       that.audioReady = false;
       that.progress = 0;
       if (!that.currSong || typeof that.currSong.id === 'undefined') return;
+      // 视频模式：字幕延迟到左滑进入字幕页时再加载，节省流量与请求
+      if (that.videoMode) {
+        if (that.enableVideoSubtitle) {
+          that.lyricLines = [{ text: '左滑查看字幕' }];
+          that.currentLyricIndex = -1;
+          that.subtitleLoaded = false;
+          that.subtitleLoading = false;
+        } else {
+          that.lyricLines = [{ text: '字幕已关闭（可在设置中开启）' }];
+          that.currentLyricIndex = 0;
+          that.subtitleLoaded = false;
+          that.subtitleLoading = false;
+        }
+      }
       if (that.currSong.url && that.currSong.url.startsWith('internal://files/')) {
         audio.oncanplay = function() {
           that.duration = audio.duration || 0;
           that.audioReady = true;
           audio.oncanplay = null;
+          if (that.pendingStartTime > 0 && that.pendingStartTime < that.duration) {
+            audio.currentTime = that.pendingStartTime;
+            that.pendingStartTime = 0;
+          }
           that.isPlaying = true;
           that.playerState.isPlaying = true;
           audio.play();
@@ -737,6 +890,10 @@
             that.duration = audio.duration || 0;
             that.audioReady = true;
             audio.oncanplay = null;
+            if (that.pendingStartTime > 0 && that.pendingStartTime < that.duration) {
+              audio.currentTime = that.pendingStartTime;
+              that.pendingStartTime = 0;
+            }
             that.isPlaying = true;
             that.playerState.isPlaying = true;
             audio.play();
@@ -815,7 +972,7 @@
           bitrate: that.bitrate
         });
       }
-      if (that.loadLyrics) {
+      if (!that.videoMode && that.loadLyrics) {
         if (that.playlistId && that.playlistId.startsWith('downloaded_songs_')) {
           that.loadLocalLyric();
         } else {
@@ -1071,11 +1228,11 @@
         if (exists) {
           return;
         }
-       
+
         const title = that.currSong.name || '未知视频';
         const coverUrl = that.cachedCoverUri || that.currSong.al.picUrl || '';
         const author = (that.currSong.ar && that.currSong.ar[0] && that.currSong.ar[0].name) || '未知作者';
-       
+
         await global.savedcontent.SavedContentManager.storeVideoAudio(
           title,
           audioUri,

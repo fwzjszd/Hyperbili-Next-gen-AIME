@@ -1,0 +1,450 @@
+<import name="title-bar" src="@components/TitleBar/TitleBar.ux"></import>
+
+<template>
+  <div class="page">
+    <!-- 预览模式：全屏查看图片 -->
+    <div class="preview-container" if="{{showPreview}}">
+      <div class="preview-top-bar">
+        <div class="preview-nav-btn" if="{{spriteImages.length > 1}}" @click="prevSprite">
+          <text class="preview-nav-text">◀</text>
+        </div>
+        <div class="preview-exit-btn" @click="exitPreview">
+          <text class="preview-exit-text">退出预览</text>
+        </div>
+        <div class="preview-nav-btn" if="{{spriteImages.length > 1}}" @click="nextSprite">
+          <text class="preview-nav-text">▶</text>
+        </div>
+      </div>
+      <div class="preview-viewer" @swipe="onSwipe">
+        <image class="sprite-img" src="{{currentSpriteUri}}"
+               style="width: {{imgW}}px; height: {{imgH}}px; position: absolute; left: {{offsetX}}px; top: {{offsetY}}px;"
+               @complete="onImgComplete" @error="onImgError"></image>
+      </div>
+      <div class="preview-count" if="{{spriteImages.length > 1}}">
+        <text class="preview-count-text">{{currentIdx + 1}} / {{spriteImages.length}}</text>
+      </div>
+    </div>
+
+    <!-- 设置模式：调节倍率 -->
+    <scroll class="scroll {{scrclass}}" scroll-y="true" bounces="true" if="{{!showPreview}}">
+      <title-bar title="雪碧图查看"></title-bar>
+      <text class="sv-title">{{title}}</text>
+
+      <div class="info-bar" if="{{!imgTooLarge}}">
+        <text class="info-text">缩放 {{zoomLevel}}x</text>
+      </div>
+
+      <!-- 雪碧图预览（与原始布局一致） -->
+      <div class="sprite-viewer" style="width: 390px; height: 390px;" @swipe="onSwipe" if="{{!imgTooLarge}}">
+        <image class="sprite-img" src="{{currentSpriteUri}}"
+               style="width: {{imgW}}px; height: {{imgH}}px; position: absolute; left: {{offsetX}}px; top: {{offsetY}}px;"
+               @complete="onImgComplete" @error="onImgError"></image>
+      </div>
+
+      <div class="zoom-controls" if="{{!imgTooLarge}}">
+        <div class="zoom-btn" @click="zoomOut">
+          <text class="zoom-btn-text">-</text>
+        </div>
+        <div class="zoom-btn zoom-reset" @click="zoomReset">
+          <text class="zoom-btn-text">{{zoomLevel}}x</text>
+        </div>
+        <div class="zoom-btn" @click="zoomIn">
+          <text class="zoom-btn-text">+</text>
+        </div>
+      </div>
+
+      <!-- 多张雪碧图切换 -->
+      <div class="sprite-nav" if="{{!imgTooLarge && spriteImages.length > 1}}">
+        <div class="nav-btn" @click="prevSprite">
+          <text class="nav-btn-text">上一张</text>
+        </div>
+        <text class="nav-count">{{currentIdx + 1}} / {{spriteImages.length}}</text>
+        <div class="nav-btn" @click="nextSprite">
+          <text class="nav-btn-text">下一张</text>
+        </div>
+      </div>
+
+      <div class="preview-btn-row" if="{{!imgTooLarge}}">
+        <div class="preview-btn" @click="enterPreview">
+          <text class="preview-btn-text">全屏预览</text>
+        </div>
+      </div>
+
+      <text class="img-status" if="{{imgTooLarge}}">{{loadStatus}}</text>
+      <text class="img-status" if="{{!imgTooLarge && !imgLoaded ? true : false}}">{{loadStatus}}</text>
+      <text style="margin-top: 20px"></text>
+    </scroll>
+  </div>
+</template>
+
+<script>
+export default {
+  public: {
+    title: '',
+    cachedSpriteId: ''
+  },
+  private: {
+    scrclass: "",
+    spriteImages: [],
+    currentIdx: 0,
+    currentSpriteUri: '',
+    zoomLevel: 1,
+    offsetX: 0,
+    offsetY: 0,
+    imgW: 150,
+    imgH: 150,
+    baseW: 150,
+    baseH: 150,
+    imgLoaded: false,
+    imgTooLarge: false,
+    loadStatus: '加载中...',
+    showPreview: false
+  },
+  async onInit() {
+    await this.loadSpriteData()
+  },
+  async loadSpriteData() {
+    try {
+      const jsonStr = await global.savedcontent.SavedContentManager.getContent(this.cachedSpriteId)
+      if (!jsonStr) {
+        this.loadStatus = '缓存数据不存在'
+        return
+      }
+
+      const parsed = JSON.parse(jsonStr)
+      const frameData = parsed.frameData
+
+      if (!frameData || !frameData.image || frameData.image.length === 0) {
+        this.loadStatus = '无可用雪碧图'
+        return
+      }
+
+      this.spriteImages = frameData.image
+
+      // 读取雪碧图尺寸字段
+      // 注意字段优先级：img_x（我们缩放后更新的字段）> img_x_size（B站API原始字段）
+      // 如果先读 img_x_size 可能拿到旧的大尺寸值导致 OOM 误判
+      const imgX = frameData.img_x || frameData.img_x_size || 100
+      const imgY = frameData.img_y || frameData.img_y_size || 100
+      const cols = frameData.img_x_len || frameData.img_cols || 10
+      const rows = frameData.img_y_len || frameData.img_rows || 10
+      const cropRows = frameData.crop_rows || rows // 实际有效行数（不含底部黑色空白）
+
+      const rawWidth = imgX * cols
+      const rawHeight = imgY * rows
+      const usedHeight = imgY * cropRows // 实际使用的区域高度（不含底部黑色空白）
+
+      global.logger.log('[spriteviewer] raw size: ' + rawWidth + 'x' + rawHeight + ', used: ' + rawWidth + 'x' + usedHeight)
+
+      // 快应用内存限制4MB(4194304字节)，RGBA每像素4字节
+      // 安全阈值：max pixels = 4194304/4 = 1048576，约1024x1024
+      const decodedBytes = rawWidth * rawHeight * 4
+      const MAX_DECODE_BYTES = 4000000 // 4MB安全阈值
+      if (decodedBytes > MAX_DECODE_BYTES) {
+        global.logger.error('[spriteviewer] image too large: ' + rawWidth + 'x' + rawHeight + ' = ' + decodedBytes + ' bytes')
+        // 如果数据是由旧版代码缓存的（img_x 未更新），尝试用 crop_rows 重新估算实际解码内存
+        if (frameData.img_x_size && !frameData.img_x && cropRows < rows) {
+          // 用实际有效区域（不含黑色空白）重新计算
+          const actualDecoded = (imgX * cols) * (imgY * cropRows) * 4
+          if (actualDecoded <= MAX_DECODE_BYTES) {
+            global.logger.log('[spriteviewer] using crop_rows to reduce estimation: ' + actualDecoded + ' bytes')
+            // 仍然加载，但只显示有效区域
+          } else {
+            this.loadStatus = '原图过大(' + rawWidth + 'x' + rawHeight + ')，请尝试在视频内容页重新下载雪碧图'
+            this.imgTooLarge = true
+            return
+          }
+        } else {
+          this.loadStatus = '原图过大(' + rawWidth + 'x' + rawHeight + ')，请尝试在视频内容页重新下载雪碧图'
+          this.imgTooLarge = true
+          return
+        }
+      }
+
+      // 默认缩到120px宽显示（对应单帧120px），最大缩放到1200px(10x)
+      // 注意：CSS width/height 只影响显示尺寸，不影响实际解码内存
+      if (rawWidth > 0) {
+        const displayRatio = 120 / rawWidth
+        this.baseW = 120
+        this.baseH = Math.round(rawHeight * displayRatio)
+        this.imgW = this.baseW
+        this.imgH = this.baseH
+      }
+
+      this.showSprite(0)
+    } catch (e) {
+      global.logger.error('[spriteviewer] loadSpriteData Error: ' + e.toString())
+      this.loadStatus = '加载失败'
+    }
+  },
+  showSprite(idx) {
+    if (idx < 0 || idx >= this.spriteImages.length) return
+    this.currentIdx = idx
+    this.currentSpriteUri = this.spriteImages[idx]
+    this.imgLoaded = false
+    this.loadStatus = '加载中...'
+    this.offsetX = 0
+    this.offsetY = 0
+    this.zoomLevel = 1
+    this.imgW = this.baseW
+    this.imgH = this.baseH
+  },
+  prevSprite() {
+    if (this.spriteImages.length <= 1) return
+    var idx = this.currentIdx - 1
+    if (idx < 0) idx = this.spriteImages.length - 1
+    this.showSprite(idx)
+  },
+  nextSprite() {
+    if (this.spriteImages.length <= 1) return
+    var idx = this.currentIdx + 1
+    if (idx >= this.spriteImages.length) idx = 0
+    this.showSprite(idx)
+  },
+  onImgComplete() {
+    this.imgLoaded = true
+  },
+  onImgError() {
+    this.loadStatus = '图片加载失败'
+  },
+  enterPreview() {
+    // 进入全屏预览，视窗定位到最顶端最左边
+    this.offsetX = 0
+    this.offsetY = 0
+    this.showPreview = true
+  },
+  exitPreview() {
+    this.showPreview = false
+  },
+  zoomIn() {
+    if (this.zoomLevel >= 10) return
+    this.zoomLevel = this.zoomLevel + 1
+    this.imgW = this.baseW * this.zoomLevel
+    this.imgH = this.baseH * this.zoomLevel
+    this.offsetX = -((this.imgW - 390) / 2)
+    this.offsetY = -((this.imgH - 390) / 2)
+  },
+  zoomOut() {
+    if (this.zoomLevel <= 1) return
+    this.zoomLevel = this.zoomLevel - 1
+    this.imgW = this.baseW * this.zoomLevel
+    this.imgH = this.baseH * this.zoomLevel
+    if (this.zoomLevel === 1) {
+      this.offsetX = 0
+      this.offsetY = 0
+    } else {
+      this.offsetX = -((this.imgW - 390) / 2)
+      this.offsetY = -((this.imgH - 390) / 2)
+    }
+  },
+  zoomReset() {
+    this.zoomLevel = 1
+    this.imgW = this.baseW
+    this.imgH = this.baseH
+    this.offsetX = 0
+    this.offsetY = 0
+  },
+  onSwipe(e) {
+    const direction = e.direction
+    if (direction === 'left') {
+      this.offsetX = Math.max(this.offsetX - 50, -(this.imgW - 390))
+    } else if (direction === 'right') {
+      this.offsetX = Math.min(this.offsetX + 50, 0)
+    } else if (direction === 'up') {
+      this.offsetY = Math.max(this.offsetY - 50, -(this.imgH - 390))
+    } else if (direction === 'down') {
+      this.offsetY = Math.min(this.offsetY + 50, 0)
+    }
+  }
+}
+</script>
+
+<style lang="less">
+@import '@less/global.less';
+
+.sv-title {
+  font-size: 22px;
+  font-weight: 600;
+  color: #ffffff;
+  margin-top: 15px;
+  width: 320px;
+  text-align: center;
+  lines: 2;
+  text-overflow: ellipsis;
+}
+
+.info-bar {
+  flex-direction: row;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.info-text {
+  font-size: 22px;
+  color: #9e9e9e;
+  margin-left: 6px;
+  margin-right: 6px;
+}
+
+.preview-container {
+  flex-direction: column;
+  width: 390px;
+  height: 100%;
+}
+
+.preview-top-bar {
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  width: 390px;
+  height: 48px;
+  background-color: #555555;
+}
+
+.preview-nav-btn {
+  width: 60px;
+  height: 48px;
+  justify-content: center;
+  align-items: center;
+}
+
+.preview-nav-text {
+  font-size: 20px;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.preview-exit-btn {
+  height: 48px;
+  justify-content: center;
+  align-items: center;
+  width: 270px;
+}
+
+.preview-count {
+  position: absolute;
+  bottom: 15px;
+  width: 390px;
+  justify-content: center;
+  align-items: center;
+}
+
+.preview-count-text {
+  font-size: 16px;
+  color: #ffffff;
+  background-color: rgba(0, 0, 0, 0.5);
+  padding-left: 10px;
+  padding-right: 10px;
+  border-radius: 8px;
+}
+
+.preview-exit-text {
+  font-size: 18px;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.sprite-viewer {
+  margin-top: 15px;
+  overflow: hidden;
+  position: relative;
+  background-color: #1a1a1a;
+  border-radius: 12px;
+}
+
+.preview-viewer {
+  width: 390px;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  background-color: #1a1a1a;
+}
+
+.sprite-img {
+  object-fit: scale-down;
+}
+
+.img-status {
+  font-size: 18px;
+  color: #9e9e9e;
+  text-align: center;
+  margin-top: 10px;
+}
+
+.zoom-controls {
+  flex-direction: row;
+  justify-content: center;
+  margin-top: 15px;
+}
+
+.zoom-btn {
+  width: 70px;
+  height: 56px;
+  border-radius: 18px;
+  background-color: #262626;
+  justify-content: center;
+  align-items: center;
+  margin-left: 12px;
+}
+
+.zoom-reset {
+  width: 90px;
+}
+
+.zoom-btn-text {
+  font-size: 26px;
+  font-weight: 700;
+  color: #FB7299;
+}
+
+.preview-btn-row {
+  flex-direction: row;
+  justify-content: center;
+  margin-top: 15px;
+}
+
+.preview-btn {
+  width: 350px;
+  height: 56px;
+  border-radius: 18px;
+  background-color: #FB7299;
+  justify-content: center;
+  align-items: center;
+}
+
+.preview-btn-text {
+  font-size: 22px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.sprite-nav {
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  margin-top: 15px;
+}
+
+.nav-btn {
+  width: 110px;
+  height: 50px;
+  border-radius: 18px;
+  background-color: #262626;
+  justify-content: center;
+  align-items: center;
+}
+
+.nav-btn-text {
+  font-size: 20px;
+  font-weight: 600;
+  color: #FB7299;
+}
+
+.nav-count {
+  font-size: 20px;
+  color: #9e9e9e;
+  text-align: center;
+  width: 120px;
+  font-weight: 600;
+}
+</style>

@@ -106,18 +106,10 @@
         "title": "视频",
         "aisummary": "视频总结",
         "intro": "视频介绍",
-        "subtitle": "字幕",
         "manifest": "视频清单",
         "showLater": "稍后再看",
         "showOnPhone": "手机上看",
         "sendReply": "发送评论"
-    },
-    "subtitle": {
-        "title": "字幕",
-        "selectSubtitle": "选择字幕",
-        "back": "返回",
-        "loading": "加载中...",
-        "noSubtitle": "暂无字幕"
     },
     "settings": {
         "title": "设置",
@@ -131,11 +123,7 @@
         "clearTemp": "清除缓存",
         "logOut": "退出登录",
         "donation": "捐赠",
-        "about": "关于应用",
-        "storageInfo": "存储空间",
-        "totalStorage": "总容量",
-        "usedStorage": "已用空间",
-        "availableStorage": "可用空间"
+        "about": "关于应用"
     },
     "opensoftware": {
         "title": "开源软件声明"

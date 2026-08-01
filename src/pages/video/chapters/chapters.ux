@@ -1,0 +1,169 @@
+<import name="title-bar" src="@components/TitleBar/TitleBar.ux"></import>
+
+<template>
+  <div class="page">
+    <scroll class="scroll {{scrclass}}" scroll-y="true" bounces="true">
+      <title-bar title="视频章节"></title-bar>
+      <text class="ch-title">{{title}}</text>
+
+      <div class="empty-tip" if="{{chapters.length === 0}}">
+        <text class="empty-text">该视频没有章节信息</text>
+      </div>
+
+      <div class="chapter-list" for="{{chapters}}">
+        <div class="chapter-item" @click="JumpToChapter($item.start)">
+          <div class="chapter-time-box">
+            <text class="chapter-time">{{ $item.timeText }}</text>
+          </div>
+          <div class="chapter-info">
+            <text class="chapter-name">{{$item.title}}</text>
+          </div>
+          <image class="chapter-arrow" src="/common/vidtool_intro.png"></image>
+        </div>
+      </div>
+
+      <text style="margin-top: 20px"></text>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import router from "@system.router"
+
+export default {
+  public: {
+    title: '',
+    bvid: '',
+    cid: '',
+    chaptersJson: ''
+  },
+  private: {
+    scrclass: "",
+    chapters: []
+  },
+  onInit() {
+    this.ParseChapters()
+  },
+  ParseChapters() {
+    try {
+      if (!this.chaptersJson) {
+        this.chapters = []
+        return
+      }
+      const raw = JSON.parse(this.chaptersJson)
+      if (!Array.isArray(raw)) {
+        this.chapters = []
+        return
+      }
+      // 格式化时间戳并过滤
+      const list = raw
+        .filter(function(cp) { return cp && typeof cp.start === 'number' })
+        .map(function(cp) {
+          return {
+            title: cp.title || '未命名章节',
+            start: cp.start,
+            timeText: this.FormatTime(cp.start)
+          }
+        }.bind(this))
+      this.chapters = list
+    } catch (e) {
+      global.logger.error('[chapters] ParseChapters Error: ' + e.toString())
+      this.chapters = []
+    }
+  },
+  FormatTime(sec) {
+    const s = Math.floor(sec)
+    const m = Math.floor(s / 60)
+    const r = s % 60
+    return m + ':' + (r < 10 ? '0' + r : r)
+  },
+  JumpToChapter(startTime) {
+    router.push({
+      uri: "pages/video/player",
+      params: {
+        bvid: this.bvid,
+        startTime: startTime,
+        videoCid: this.cid
+      }
+    })
+  }
+}
+</script>
+
+<style lang="less">
+@import '@less/global.less';
+
+.ch-title {
+  font-size: 22px;
+  font-weight: 600;
+  color: #ffffff;
+  margin-top: 15px;
+  width: 320px;
+  text-align: center;
+  lines: 2;
+  text-overflow: ellipsis;
+}
+
+.empty-tip {
+  flex-direction: column;
+  align-items: center;
+  margin-top: 60px;
+}
+
+.empty-text {
+  font-size: 22px;
+  color: #9e9e9e;
+}
+
+.chapter-list {
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.chapter-item {
+  width: 370px;
+  height: 80px;
+  border-radius: 24px;
+  background-color: #262626;
+  flex-direction: row;
+  align-items: center;
+  margin-top: 10px;
+  position: relative;
+}
+
+.chapter-time-box {
+  width: 70px;
+  align-items: center;
+  justify-content: center;
+  margin-left: 15px;
+}
+
+.chapter-time {
+  font-size: 22px;
+  font-weight: 600;
+  color: #FB7299;
+}
+
+.chapter-info {
+  flex: 1;
+  margin-left: 10px;
+  margin-right: 40px;
+}
+
+.chapter-name {
+  font-size: 24px;
+  color: #ffffff;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+
+.chapter-arrow {
+  position: absolute;
+  right: 15px;
+  width: 24px;
+  height: 24px;
+  object-fit: scale-down;
+  opacity: 0.5;
+}
+</style>

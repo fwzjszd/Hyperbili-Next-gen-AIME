@@ -5,10 +5,10 @@
       <title-bar title="settings.performanceSettings"></title-bar>
       <text class="tip_text" style="margin-top: 15px">{{ $t("settings.performanceTip") }}</text>
       
-      <div class="setbase" onclick="SwitchSet('enable_full_anim')" style="margin-top: 20px">
+      <div class="setbase" style="margin-top: 20px" onclick="SwitchAnimationMode()">
         <image class="seticon" src="/common/settings_enablefullanim.png"></image>
         <text class="setext_small">{{ $t("settings.enableFullAnimation") }}</text>
-        <text class="countset_num">{{ enableFullAnimation ? "开" : "关" }}</text>
+        <text class="countset_num">{{enableFullAnimation}}</text>
       </div>
       
       <div class="setbase" onclick="SwitchSet('enable_comment_images')">
@@ -16,7 +16,18 @@
         <text class="setext_small">{{ $t("settings.enableCommentImages") }}</text>
         <text class="countset_num">{{ enableCommentImages ? "开" : "关" }}</text>
       </div>
-      
+
+      <div class="setbase" onclick="SwitchSet('enable_video_subtitle')">
+        <image class="seticon" src="/common/settings_enablecommentimages.png"></image>
+        <text class="setext_small">听视频字幕</text>
+        <text class="countset_num">{{ enableVideoSubtitle ? "开" : "关" }}</text>
+      </div>
+
+      <div class="setbase_sub" if="{{ enableVideoSubtitle }}" onclick="AdjustSubtitleOffset()">
+        <text class="setext_sub">字幕同步延时</text>
+        <text class="countset_num">{{ subtitleSyncOffset > 0 ? '+' + subtitleSyncOffset.toFixed(1) + 's' : subtitleSyncOffset.toFixed(1) + 's' }}</text>
+      </div>
+
       <text style="margin-top: 30px"></text>
     </scroll>
   </div>
@@ -26,21 +37,14 @@
 import prompt from "@system.prompt"
 export default {
   private: {
-    enableFullAnimation: false,
+    enableFullAnimation: '关闭',
     enableCommentImages: false,
+    enableVideoSubtitle: true,
+    subtitleSyncOffset: 0.3,
     scrclass: ""
   },
   SwitchSet(name) {
-    if (name === "enable_full_anim") {
-      this.enableFullAnimation = !this.enableFullAnimation;
-      global.settings.saveSettings({ enableFullAnimation: this.enableFullAnimation });
-      if (this.enableFullAnimation) {
-        prompt.showToast({
-          message: "开启此选项会导致首页等页面在低性能设备上严重卡顿，因此建议保持关闭！",
-          duration: 6000
-        });
-      }
-    } else if (name === "enable_comment_images") {
+    if (name === "enable_comment_images") {
       this.enableCommentImages = !this.enableCommentImages;
       global.settings.saveSettings({ enableCommentImages: this.enableCommentImages });
       if (this.enableCommentImages) {
@@ -49,11 +53,41 @@ export default {
           duration: 6000
         });
       }
+    } else if (name === "enable_video_subtitle") {
+      this.enableVideoSubtitle = !this.enableVideoSubtitle;
+      global.settings.saveSettings({ enableVideoSubtitle: this.enableVideoSubtitle });
+    }
+  },
+  AdjustSubtitleOffset() {
+    var offsets = [-2.0, -1.5, -1.0, -0.5, 0.0, 0.3, 0.5, 1.0, 1.5, 2.0];
+    var currentIdx = offsets.indexOf(this.subtitleSyncOffset);
+    if (currentIdx < 0) currentIdx = 5;
+    currentIdx = (currentIdx + 1) % offsets.length;
+    this.subtitleSyncOffset = offsets[currentIdx];
+    global.settings.saveSettings({ subtitleSyncOffset: this.subtitleSyncOffset });
+    prompt.showToast({
+      message: "字幕同步延时: " + (this.subtitleSyncOffset > 0 ? '+' : '') + this.subtitleSyncOffset.toFixed(1) + "s",
+      duration: 2000
+    });
+  },
+  SwitchAnimationMode() {
+    const modes = ['关闭', '开启', '完整'];
+    let currentIndex = modes.indexOf(this.enableFullAnimation);
+    currentIndex = (currentIndex + 1) % modes.length;
+    this.enableFullAnimation = modes[currentIndex];
+    global.settings.saveSettings({ enableFullAnimation: this.enableFullAnimation });
+    if (this.enableFullAnimation === '完整') {
+      prompt.showToast({
+        message: "完整动画会导致首页等页面在低性能设备上严重卡顿，建议低性能设备选择\"关闭\"或\"开启\"！",
+        duration: 6000
+      });
     }
   },
   UpdateNumView() {
     this.enableFullAnimation = global.settings.SETTINGS.enableFullAnimation
     this.enableCommentImages = global.settings.SETTINGS.enableCommentImages
+    this.enableVideoSubtitle = global.settings.SETTINGS.enableVideoSubtitle
+    this.subtitleSyncOffset = global.settings.SETTINGS.subtitleSyncOffset
   },
   onInit() {
     this.UpdateNumView()

@@ -68,5 +68,28 @@ export const BilibiliClientUserMethods = {
         const response = await this.getRequest(`${url}?uids=${param}`)
 
         return response.data.data
+    },
+
+    // 获取与指定用户的关注关系
+    async getUserRelationByUID(this: any, uid: String) {
+        const url = `https://api.bilibili.com/x/relation`;
+        const response = await this.getRequest(`${url}?fid=${uid}`);
+        return response.data.data
+    },
+
+    // 关注用户
+    async followUser(this: any, uid: String) {
+        const url = "https://api.bilibili.com/x/relation/modify";
+        const body = `fid=${uid}&act=1&re_src=11&csrf=${this.biliJct}`;
+        const response = await this.postRequest(url, body, "application/x-www-form-urlencoded");
+        return response.data
+    },
+
+    // 取消关注用户
+    async unfollowUser(this: any, uid: String) {
+        const url = "https://api.bilibili.com/x/relation/modify";
+        const body = `fid=${uid}&act=2&re_src=11&csrf=${this.biliJct}`;
+        const response = await this.postRequest(url, body, "application/x-www-form-urlencoded");
+        return response.data
     }
 }

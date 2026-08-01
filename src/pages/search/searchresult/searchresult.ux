@@ -19,69 +19,75 @@
         </text>
       </div>
       
-      <!-- 类型导航条：点击切换列表类型 -->
+      <!-- 类型导航条（点击切换，非滑动） -->
       <div class="typebar" style.static="margin-top: 13px" if="{{!overview_mode}}">
-        <text class="typetext" style="color: {{typebar_colors.c1}};" @click="TypeBarClick(0)">{{ $t("searchresult.all") }}</text>
-        <text class="typetext" style="color: {{typebar_colors.c2}}; margin-left: 20px;" @click="TypeBarClick(1)">{{ $t("searchresult.video") }}</text>
-        <text class="typetext" style="color: {{typebar_colors.c3}}; margin-left: 20px;" @click="TypeBarClick(2)">{{ $t("searchresult.user") }}</text>
-        <text class="typetext" style="color: {{typebar_colors.c4}}; margin-left: 20px;" @click="TypeBarClick(3)">{{ $t("searchresult.article") }}</text>
+        <div class="typebtn" @click="SwitchType(0)">
+          <text class="typetext" style="color: {{typebar_colors.c1}};">{{ $t("searchresult.all") }}</text>
+        </div>
+        <div class="typebtn" @click="SwitchType(1)">
+          <text class="typetext" style="color: {{typebar_colors.c2}};">{{ $t("searchresult.video") }}</text>
+        </div>
+        <div class="typebtn" @click="SwitchType(2)">
+          <text class="typetext" style="color: {{typebar_colors.c3}};">{{ $t("searchresult.user") }}</text>
+        </div>
+        <div class="typebtn" @click="SwitchType(3)">
+          <text class="typetext" style="color: {{typebar_colors.c4}};">{{ $t("searchresult.article") }}</text>
+        </div>
       </div>
-      
-      <!-- 列表容器：禁用左右滑动，仅通过上方类型按钮切换 -->
-      <div class="swipermain" style.static="margin-top: 15px" if="{{!anims.show_loading}}">
-        <!-- 第一页：综合结果 -->
-        <div class="swiper_box">
-          <scroll class="swiper_container" scroll-y="true" if="{{typebar_if.c1}}" @scroll="ScrollOverviewCheck">
-            <div class="tiplabel" if="{{comprehensive_status.has_users_result}}">
-              <!-- 文案为固定文本，添加 static -->
-              <text class="listtip" static>用户</text>
+
+      <!-- 结果列表：点击按钮切换，禁用水平滑动避免偏移 -->
+      <!-- 第一页：综合结果 -->
+      <div class="result-list" if="{{!anims.show_loading && typebar_if.c1}}">
+        <scroll class="swiper_container" scroll-y="true" @scroll="ScrollOverviewCheck">
+          <div class="tiplabel" if="{{comprehensive_status.has_users_result}}">
+            <!-- 文案为固定文本，添加 static -->
+            <text class="listtip" static>用户</text>
+          </div>
+          <div style.static="width: 100%; justify-content: center" if="{{comprehensive_status.has_users_result}}">
+            <user user="{{search.users[0]}}"></user>
+          </div>
+          <div class="tiplabel" style.static="margin-top: 10px" if="{{comprehensive_status.has_video_result}}">
+            <text class="listtip" static>视频</text>
+          </div>
+          <div style.static="width: 100%; justify-content: center" if="{{comprehensive_status.has_video_result}}" for="{{search.comprehensive_videos}}">
+            <div style="width: 77%; justify-content: center; margin-top: 5px" onclick="OpenVideo($item.bvid)">
+              <videoshow video="{{$item}}"></videoshow>
             </div>
-            <div style.static="width: 100%; justify-content: center" if="{{comprehensive_status.has_users_result}}">
-              <user user="{{search.users[0]}}"></user>
+          </div>
+          <text style="margin-top: 30px" static></text>
+        </scroll>
+      </div>
+
+      <!-- 第二页：视频 -->
+      <div class="result-list" if="{{!anims.show_loading && typebar_if.c2}}">
+        <scroll class="swiper_container" scroll-y="true" @scroll="ScrollOverviewCheck">
+          <div style.static="width: 100%; justify-content: center" for="{{search.videos}}">
+            <div style="width: 77%; justify-content: center; margin-top: 5px" onclick="OpenVideo($item.bvid)">
+              <videoshow video="{{$item}}"></videoshow>
             </div>
-            <div class="tiplabel" style.static="margin-top: 10px" if="{{comprehensive_status.has_video_result}}">
-              <text class="listtip" static>视频</text>
-            </div>
-            <div style.static="width: 100%; justify-content: center" if="{{comprehensive_status.has_video_result}}" for="{{search.comprehensive_videos}}">
-              <div style="width: 77%; justify-content: center; margin-top: 5px" onclick="OpenVideo($item.bvid)">
-                <videoshow video="{{$item}}"></videoshow>
-              </div>
-            </div>
-            <text style="margin-top: 30px" static></text>
-          </scroll>
-        </div>
-        
-        <!-- 第二页：视频 -->
-        <div class="swiper_box">
-          <scroll if="{{typebar_if.c2}}" class="swiper_container" scroll-y="true" @scroll="ScrollOverviewCheck">
-            <div style.static="width: 100%; justify-content: center" for="{{search.videos}}">
-              <div style="width: 77%; justify-content: center; margin-top: 5px" onclick="OpenVideo($item.bvid)">
-                <videoshow video="{{$item}}"></videoshow>
-              </div>
-            </div>
-            <text style="margin-top: 30px" static></text>
-          </scroll>
-        </div>
-        
-        <!-- 第三页：用户 -->
-        <div class="swiper_box">
-          <scroll if="{{typebar_if.c3}}" class="swiper_container" scroll-y="true" @scroll="ScrollOverviewCheck">
-            <div style.static="width: 100%; justify-content: center; margin-top: 5px" for="{{search.users}}">
-              <user user="{{$item}}"></user>
-            </div>
-            <text style="margin-top: 30px" static></text>
-          </scroll>
-        </div>
-        
-        <!-- 第四页：文章 -->
-        <div class="swiper_box">
-          <scroll if="{{typebar_if.c4}}" class="swiper_container" scroll-y="true" @scroll="ScrollOverviewCheck">
-            <div style.static="flex-direction: column; align-items: center; width: 100%" for="{{search.articles}}" onclick="OpenArticle($item)">
-              <articleshow article="{{$item}}" show-category="true"></articleshow>
-            </div>
-            <text style="margin-top: 30px" static></text>
-          </scroll>
-        </div>
+          </div>
+          <text style="margin-top: 30px" static></text>
+        </scroll>
+      </div>
+
+      <!-- 第三页：用户 -->
+      <div class="result-list" if="{{!anims.show_loading && typebar_if.c3}}">
+        <scroll class="swiper_container" scroll-y="true" @scroll="ScrollOverviewCheck">
+          <div style.static="width: 100%; justify-content: center; margin-top: 5px" for="{{search.users}}">
+            <user user="{{$item}}"></user>
+          </div>
+          <text style="margin-top: 30px" static></text>
+        </scroll>
+      </div>
+
+      <!-- 第四页：文章 -->
+      <div class="result-list" if="{{!anims.show_loading && typebar_if.c4}}">
+        <scroll class="swiper_container" scroll-y="true" @scroll="ScrollOverviewCheck">
+          <div style.static="flex-direction: column; align-items: center; width: 100%" for="{{search.articles}}" onclick="OpenArticle($item)">
+            <articleshow article="{{$item}}" show-category="true"></articleshow>
+          </div>
+          <text style="margin-top: 30px" static></text>
+        </scroll>
       </div>
     </scroll>
     <image style="position: absolute; margin-top: 305px" if="{{anims.show_loading}}" src="{{anims.loading_src.value}}"></image>
@@ -144,8 +150,9 @@ export default {
       this.typebar_if[`c${index.index + 1}`] = true
     }
   },
-  TypeBarClick(index) {
-    // 点击类型按钮，切换到对应列表（替代原先的左右滑动切换）
+  // 点击类型按钮切换结果列表（替代原 swiper 滑动切换）
+  SwitchType(index) {
+    global.logger.log("[searchresult] SwitchType: " + index)
     this.UpdateTypeBarColors({ index })
   },
   SearchBarClick() {

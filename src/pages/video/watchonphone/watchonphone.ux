@@ -1,0 +1,111 @@
+<template>
+  <div class="page">
+    <div class="content">
+      <text class="title">在手机上观看</text>
+      <text class="subtitle">使用哔哩哔哩App扫码打开</text>
+      <div class="qr-wrapper">
+        <qrcode value="{{qrValue}}" show="{{showQR}}" style="width: 210px; height: 210px"></qrcode>
+      </div>
+      <text class="hint">请保持此界面，使用手机B站App扫码</text>
+      <div class="exit-btn" @click="ExitPage">
+        <text class="exit-text">退出</text>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import router from "@system.router"
+import brightness from "@system.brightness"
+
+export default {
+  public: {
+    bvid: "",
+    title: ""
+  },
+  private: {
+    qrValue: "",
+    showQR: false
+  },
+  onInit() {
+    // 设置屏幕常亮
+    brightness.setKeepScreenOn({ keepScreenOn: true })
+    
+    // 生成QR码内容：B站视频URL
+    this.qrValue = `https://www.bilibili.com/video/${this.bvid}`
+    this.showQR = true
+  },
+  onDestroy() {
+    // 退出时关闭屏幕常亮
+    brightness.setKeepScreenOn({ keepScreenOn: false })
+  },
+  ExitPage() {
+    router.back()
+  }
+}
+</script>
+
+<style lang="less">
+@import '@less/global.less';
+
+.page {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.content {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #ffffff;
+  margin-top: 40px;
+}
+
+.subtitle {
+  font-size: 20px;
+  color: #9e9e9e;
+  margin-top: 8px;
+}
+
+.qr-wrapper {
+  margin-top: 30px;
+  width: 233px;
+  height: 233px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  background-color: #ffffff;
+}
+
+.hint {
+  font-size: 18px;
+  color: #9e9e9e;
+  margin-top: 25px;
+  text-align: center;
+}
+
+.exit-btn {
+  margin-top: 40px;
+  width: 200px;
+  height: 50px;
+  border-radius: 90px;
+  background-color: #262626;
+  justify-content: center;
+  align-items: center;
+}
+
+.exit-text {
+  font-size: 24px;
+  font-weight: 600;
+  color: #ffffff;
+}
+</style>
