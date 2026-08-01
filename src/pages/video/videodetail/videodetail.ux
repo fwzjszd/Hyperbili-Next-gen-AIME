@@ -454,7 +454,8 @@ export default {
       uri: "pages/video/watchonphone",
       params: {
         bvid: this.bvid,
-        title: this.vid.title || ''
+        title: this.vid.title || '',
+        pageNum: this.currentPageNum || 1
       }
     })
   }

@@ -105,18 +105,10 @@
         "title": "Video",
         "aisummary": "Video Summary",
         "intro": "Video Intro",
-        "subtitle": "Subtitle",
         "manifest": "Video List",
         "showLater": "Watch Later",
         "showOnPhone": "Watch on Phone",
         "sendReply": "Send Comment"
-    },
-    "subtitle": {
-        "title": "Subtitles",
-        "selectSubtitle": "Select Subtitle",
-        "back": "Back",
-        "loading": "Loading...",
-        "noSubtitle": "No subtitles available"
     },
     "settings": {
         "title": "Settings",
@@ -130,11 +122,7 @@
         "clearTemp": "Clear Cache",
         "logOut": "Log Out",
         "donation": "Donate",
-        "about": "About the App",
-        "storageInfo": "Storage Info",
-        "totalStorage": "Total Storage",
-        "usedStorage": "Used Space",
-        "availableStorage": "Available Space"
+        "about": "About the App"
     },
     "dynamic": {
         "title": "Dynamic",

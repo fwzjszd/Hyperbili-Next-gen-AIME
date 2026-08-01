@@ -21,7 +21,8 @@ import brightness from "@system.brightness"
 export default {
   public: {
     bvid: "",
-    title: ""
+    title: "",
+    pageNum: 1
   },
   private: {
     qrValue: "",
@@ -31,8 +32,11 @@ export default {
     // 设置屏幕常亮
     brightness.setKeepScreenOn({ keepScreenOn: true })
     
-    // 生成QR码内容：B站视频URL
-    this.qrValue = `https://www.bilibili.com/video/${this.bvid}`
+    // 生成QR码内容：B站视频URL；分P视频携带页码，确保扫码打开当前分P
+    const page = Number(this.pageNum) || 1
+    this.qrValue = page > 1
+      ? `https://www.bilibili.com/video/${this.bvid}?p=${page}`
+      : `https://www.bilibili.com/video/${this.bvid}`
     this.showQR = true
   },
   onDestroy() {
