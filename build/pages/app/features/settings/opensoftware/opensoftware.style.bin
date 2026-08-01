@@ -1,58 +1,0 @@
-∞
-entry∑
-openpage-scrollü
-	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]∑
-fromback-scrollü
-	keyframes2è[{"time":0,"transform":{"translateY":"232px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateY":"0px","scaleX":0.75,"scaleY":0.75}}]∑
-backpage-scrollü
-	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]q
-page
-	display2flex
-flexDirection2column
-
-alignItems2center
-width2100%
-height2100%˘
-scroll
-	display2flex
-flexDirection2column
-
-alignItems2center
-width2100%
-height2100%"
-animationName2openpage-scroll!
-animationTimingFunction2ease
-animationDuration2500ms
-animationDirection2reverseò
-scroll-backanim"
-animationName2backpage-scroll!
-animationTimingFunction2ease
-animationDuration2500ms
-animationDirection2normalù
-scroll-frombackanim"
-animationName2fromback-scroll!
-animationTimingFunction2ease
-animationDuration2500ms
-animationDirection2reverse
-text
-color2whiteÏ
-bg
-backgroundColor2	#262626b0
-width278%
-height2100px
-
-alignItems2center
-borderRadius225px
-
-paddingTop210px
-paddingRight210px
-paddingBottom210px
-paddingLeft210px
-	marginTop210pxB
-t
-
-marginLeft210px
-
-fontSize226px
-
-fontWeightÿ

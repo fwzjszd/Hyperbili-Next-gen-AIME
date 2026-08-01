@@ -1,86 +1,0 @@
-ç
-entry∑
-openpage-scrollü
-	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]∑
-fromback-scrollü
-	keyframes2è[{"time":0,"transform":{"translateY":"232px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateY":"0px","scaleX":0.75,"scaleY":0.75}}]∑
-backpage-scrollü
-	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]q
-page
-	display2flex
-flexDirection2column
-
-alignItems2center
-width2100%
-height2100%˘
-scroll
-	display2flex
-flexDirection2column
-
-alignItems2center
-width2100%
-height2100%"
-animationName2openpage-scroll!
-animationTimingFunction2ease
-animationDuration2500ms
-animationDirection2reverseò
-scroll-backanim"
-animationName2backpage-scroll!
-animationTimingFunction2ease
-animationDuration2500ms
-animationDirection2normalù
-scroll-frombackanim"
-animationName2fromback-scroll!
-animationTimingFunction2ease
-animationDuration2500ms
-animationDirection2reverse
-text
-color2white'
-
-compbase
-flexDirection2column-
-h1
-
-fontSize234px
-
-fontWeightÿ-
-h2
-
-fontSize230px
-
-fontWeightÙ
-p
-
-fontSize226px
-span
-
-fontSize224px4
-strong
-
-fontWeight2bold
-
-fontSize226px¶
-
-blockquote
-	fontStyle2italic
-
-marginLeft210px
-borderLeftWidth23px
-borderLeftStyle2solid
-borderLeftColor2#cccccc
-paddingLeft210px
-br
-	marginTop22pxp
-img
-width2100%
-height2250px
-	objectFit2contain
-borderRadius210px
-	marginTop210pxa
-
-figcaption
-
-fontSize220px
-color2#555555
-	marginTop25px
-	textAlign2center

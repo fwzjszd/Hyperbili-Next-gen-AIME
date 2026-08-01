@@ -1,92 +1,0 @@
-∞
-entry∑
-openpage-scrollü
-	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]∑
-fromback-scrollü
-	keyframes2è[{"time":0,"transform":{"translateY":"232px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateY":"0px","scaleX":0.75,"scaleY":0.75}}]∑
-backpage-scrollü
-	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]q
-page
-	display2flex
-flexDirection2column
-
-alignItems2center
-width2100%
-height2100%˘
-scroll
-	display2flex
-flexDirection2column
-
-alignItems2center
-width2100%
-height2100%"
-animationName2openpage-scroll!
-animationTimingFunction2ease
-animationDuration2500ms
-animationDirection2reverseò
-scroll-backanim"
-animationName2backpage-scroll!
-animationTimingFunction2ease
-animationDuration2500ms
-animationDirection2normalù
-scroll-frombackanim"
-animationName2fromback-scroll!
-animationTimingFunction2ease
-animationDuration2500ms
-animationDirection2reverse
-text
-color2white
-dmlist
-width2313pxÜ
-user
-	marginTop210px
-height2119px
-borderRadius233px
-backgroundColor2#222222
-flexDirection2row
-width2313px
-
-alignItems2center
-
-paddingTop210px
-paddingRight210px
-paddingBottom210px
-paddingLeft210px¶
-
-userface
-
-minWidth275px
-	minHeight275px
-
-maxWidth275px
-	maxHeight275px
-	objectFit2
-scale-down
-
-marginLeft226px
-borderRadius250%U
-
-infoarea
-flexDirection2column
-justifyContent2center
-width2195pxz
-
-username
-
-fontSize228px
-
-fontWeightÿ
-
-marginLeft211px
-	maxHeight240px
-textOverflow2ellipsisç
-	lastmsg
-
-fontSize220px
-
-fontWeightÿ
-
-marginLeft211px
-	maxHeight255px
-textOverflow2ellipsis
-color2#585858

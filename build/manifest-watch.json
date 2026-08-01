@@ -77,14 +77,14 @@
       "pages/video/videodetail": {
         "component": "videodetail"
       },
+      "pages/video/subtitle": {
+        "component": "subtitle"
+      },
       "pages/video/player": {
         "component": "player"
       },
       "pages/app/arealist": {
         "component": "arealist"
-      },
-      "pages/video/subtitle": {
-        "component": "subtitle"
       },
       "pages/app/features/settings": {
         "component": "settings"
@@ -148,6 +148,9 @@
       },
       "pages/app/features/savedcontent": {
         "component": "savedcontent"
+      },
+      "pages/app/features/watchlater": {
+        "component": "watchlater"
       },
       "pages/debug/componentstest": {
         "component": "componentstest"

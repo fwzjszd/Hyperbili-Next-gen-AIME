@@ -1,58 +1,0 @@
-µ
-entry∑
-openpage-scrollü
-	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]∑
-fromback-scrollü
-	keyframes2è[{"time":0,"transform":{"translateY":"232px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateY":"0px","scaleX":0.75,"scaleY":0.75}}]∑
-backpage-scrollü
-	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]q
-page
-	display2flex
-flexDirection2column
-
-alignItems2center
-width2100%
-height2100%˘
-scroll
-	display2flex
-flexDirection2column
-
-alignItems2center
-width2100%
-height2100%"
-animationName2openpage-scroll!
-animationTimingFunction2ease
-animationDuration2500ms
-animationDirection2reverseò
-scroll-backanim"
-animationName2backpage-scroll!
-animationTimingFunction2ease
-animationDuration2500ms
-animationDirection2normalù
-scroll-frombackanim"
-animationName2fromback-scroll!
-animationTimingFunction2ease
-animationDuration2500ms
-animationDirection2reverse
-text
-color2white
-user
-backgroundColor2	#262626b0
-width2337px
-height299px
-borderRadius224px
-flexDirection2columng
-
-userinfo
-	marginTop212px
-
-marginLeft223px
-
-alignItems2center
-flexDirection2rowL
-userstat_text
-
-fontSize218px
-
-fontWeightÙ
-color2#9e9e9e

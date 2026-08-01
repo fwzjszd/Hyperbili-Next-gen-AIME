@@ -1,108 +1,0 @@
-ç
-entry∑
-openpage-scrollü
-	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]∑
-fromback-scrollü
-	keyframes2è[{"time":0,"transform":{"translateY":"232px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateY":"0px","scaleX":0.75,"scaleY":0.75}}]∑
-backpage-scrollü
-	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]q
-page
-	display2flex
-flexDirection2column
-
-alignItems2center
-width2100%
-height2100%˘
-scroll
-	display2flex
-flexDirection2column
-
-alignItems2center
-width2100%
-height2100%"
-animationName2openpage-scroll!
-animationTimingFunction2ease
-animationDuration2500ms
-animationDirection2reverseò
-scroll-backanim"
-animationName2backpage-scroll!
-animationTimingFunction2ease
-animationDuration2500ms
-animationDirection2normalù
-scroll-frombackanim"
-animationName2fromback-scroll!
-animationTimingFunction2ease
-animationDuration2500ms
-animationDirection2reverse
-text
-color2whiteD
-time
-
-fontSize250px
-
-fontWeightÿ
-	marginTop220pxô
-	btnbase
-width2130px
-height2130px
-borderRadius250%
-backgroundColor2#222222
-
-alignItems2center
-justifyContent2centerF
-	btntext
-
-fontSize230px
-
-fontWeightÿ
-	marginTop25pxM
-smallbtntext
-
-fontSize225px
-
-fontWeightÿ
-
-marginLeft211pxH
-btnimg
-width270px
-height276px
-	objectFit2
-scale-down„
-btn
-	display2flex
-flexDirection2column
-
-paddingTop20px
-paddingRight20px
-paddingBottom20px
-paddingLeft20px
-backgroundColor2	#00000000
-justifyContent2center
-
-alignItems2centerü
-
-smallbtn
-width2140px
-height255px
-borderRadius232px
-	display2flex
-flexDirection2row
-
-paddingTop20px
-paddingRight20px
-paddingBottom20px
-paddingLeft20px
-backgroundColor2#222222
-justifyContent2center
-
-alignItems2center¬
-	btnline
-	display2flex
-flexDirection2row
-
-paddingTop20px
-paddingRight20px
-paddingBottom20px
-paddingLeft20px
-backgroundColor2	#00000000
-width2300px

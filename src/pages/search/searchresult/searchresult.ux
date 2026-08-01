@@ -19,16 +19,16 @@
         </text>
       </div>
       
-      <!-- 类型导航条 -->
+      <!-- 类型导航条：点击切换列表类型 -->
       <div class="typebar" style.static="margin-top: 13px" if="{{!overview_mode}}">
-        <text class="typetext" style="color: {{typebar_colors.c1}};">{{ $t("searchresult.all") }}</text>
-        <text class="typetext" style="color: {{typebar_colors.c2}}; margin-left: 20px;">{{ $t("searchresult.video") }}</text>
-        <text class="typetext" style="color: {{typebar_colors.c3}}; margin-left: 20px;">{{ $t("searchresult.user") }}</text>
-        <text class="typetext" style="color: {{typebar_colors.c4}}; margin-left: 20px;">{{ $t("searchresult.article") }}</text>
+        <text class="typetext" style="color: {{typebar_colors.c1}};" @click="TypeBarClick(0)">{{ $t("searchresult.all") }}</text>
+        <text class="typetext" style="color: {{typebar_colors.c2}}; margin-left: 20px;" @click="TypeBarClick(1)">{{ $t("searchresult.video") }}</text>
+        <text class="typetext" style="color: {{typebar_colors.c3}}; margin-left: 20px;" @click="TypeBarClick(2)">{{ $t("searchresult.user") }}</text>
+        <text class="typetext" style="color: {{typebar_colors.c4}}; margin-left: 20px;" @click="TypeBarClick(3)">{{ $t("searchresult.article") }}</text>
       </div>
       
-      <!-- 分页 swiper：仅在加载结束后显示 -->
-      <swiper indicator="false" @change="UpdateTypeBarColors" class="swipermain" style.static="margin-top: 15px" if="{{!anims.show_loading}}">
+      <!-- 列表容器：禁用左右滑动，仅通过上方类型按钮切换 -->
+      <div class="swipermain" style.static="margin-top: 15px" if="{{!anims.show_loading}}">
         <!-- 第一页：综合结果 -->
         <div class="swiper_box">
           <scroll class="swiper_container" scroll-y="true" if="{{typebar_if.c1}}" @scroll="ScrollOverviewCheck">
@@ -82,7 +82,7 @@
             <text style="margin-top: 30px" static></text>
           </scroll>
         </div>
-      </swiper>
+      </div>
     </scroll>
     <image style="position: absolute; margin-top: 305px" if="{{anims.show_loading}}" src="{{anims.loading_src.value}}"></image>
   </div>
@@ -143,6 +143,10 @@ export default {
       this.typebar_colors[`c${index.index + 1}`] = "#0851ac"
       this.typebar_if[`c${index.index + 1}`] = true
     }
+  },
+  TypeBarClick(index) {
+    // 点击类型按钮，切换到对应列表（替代原先的左右滑动切换）
+    this.UpdateTypeBarColors({ index })
   },
   SearchBarClick() {
     router.back()

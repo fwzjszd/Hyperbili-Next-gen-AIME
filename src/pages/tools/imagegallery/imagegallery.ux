@@ -1,0 +1,86 @@
+<import name="title-bar" src="@components/TitleBar/TitleBar.ux"></import>
+<import name="online-image" src="@components/BetterOnlineImage/BetterOnlineImage.ux"></import>
+
+<template>
+  <div class="page">
+    <scroll scroll-y="true" class="scroll {{scrclass}}" bounces="true">
+      <title-bar title="图片画廊"></title-bar>
+      <text class="gallery-info">共{{imageList.length}}张图片，点击可查看大图</text>
+      <div class="gallery-list">
+        <div class="gallery-item" for="{{imageList}}">
+          <online-image
+            src="{{$item}}@480w_960h"
+            width="300px"
+            height="{{imageHeight}}"
+            lock-size="true"
+            object-fit="contain"
+            loading-anim="true"
+            margin-top="15px"
+            @click="OpenFullImage($item)">
+          </online-image>
+        </div>
+      </div>
+      <text style="margin-top: 25px"></text>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import router from "@system.router"
+import device from "@system.device"
+
+export default {
+  public: {
+    images: "[]"
+  },
+  private: {
+    imageList: [],
+    imageHeight: "300px",
+    scrclass: ""
+  },
+  OpenFullImage(imgSrc) {
+    router.push({
+      uri: "pages/tools/picturedetail",
+      params: { img_uri: imgSrc }
+    })
+  },
+  onInit() {
+    try {
+      this.imageList = JSON.parse(this.images)
+    } catch (e) {
+      global.logger.error("[imagegallery] parse images error: " + e.toString())
+      this.imageList = []
+    }
+    device.getInfo({
+      success: (info) => {
+        const screenHeight = info.screenHeight || 400
+        this.imageHeight = (screenHeight - 100) + "px"
+      }
+    })
+  }
+}
+</script>
+
+<style lang="less">
+@import '@less/global.less';
+
+.gallery-info {
+  font-size: 22px;
+  color: #999999;
+  text-align: center;
+  margin-top: 15px;
+}
+
+.gallery-list {
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+}
+
+.gallery-item {
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 10px;
+}
+</style>

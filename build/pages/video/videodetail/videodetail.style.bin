@@ -1,91 +1,0 @@
-ﬂ
-entry∑
-openpage-scrollü
-	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]∑
-fromback-scrollü
-	keyframes2è[{"time":0,"transform":{"translateY":"232px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateY":"0px","scaleX":0.75,"scaleY":0.75}}]∑
-backpage-scrollü
-	keyframes2è[{"time":0,"transform":{"translateX":"0px","scaleX":1,"scaleY":1}},{"time":100,"transform":{"translateX":"500px","scaleX":0.75,"scaleY":0.75}}]q
-page
-	display2flex
-flexDirection2column
-
-alignItems2center
-width2100%
-height2100%˘
-scroll
-	display2flex
-flexDirection2column
-
-alignItems2center
-width2100%
-height2100%"
-animationName2openpage-scroll!
-animationTimingFunction2ease
-animationDuration2500ms
-animationDirection2reverseò
-scroll-backanim"
-animationName2backpage-scroll!
-animationTimingFunction2ease
-animationDuration2500ms
-animationDirection2normalù
-scroll-frombackanim"
-animationName2fromback-scroll!
-animationTimingFunction2ease
-animationDuration2500ms
-animationDirection2reverse
-text
-color2whiten
-
-vidtitle
-
-fontSize220px
-
-fontWeightÿ
-color2#9e9e9e
-	marginTop210px
-width2281pxb
-	statbar
-flexDirection2row
-
-alignItems2center
-	marginTop210px
-width2281px8
-stat
-flexDirection2row
-
-alignItems2centerI
-	statimg
-width220px
-height215px
-	objectFit2
-scale-down[
-	statext
-
-fontSize220px
-
-fontWeightÿ
-color2#9e9e9e
-
-marginLeft25px8
-
-vidtoolbar
-flexDirection2row
-width2374pxÅ
-	vidtool
-flexDirection2column
-justifyContent2center
-
-alignItems2center
-
-marginLeft215px
-width285pxK
-vidtooltext
-	marginTop210px
-
-fontSize220px
-
-fontWeightÿ
-
-vidtoolimg
-width262px

@@ -77,14 +77,14 @@
       "pages/video/videodetail": {
         "component": "videodetail"
       },
+      "pages/video/subtitle": {
+        "component": "subtitle"
+      },
       "pages/video/player": {
         "component": "player"
       },
       "pages/app/arealist": {
         "component": "arealist"
-      },
-      "pages/video/subtitle": {
-        "component": "subtitle"
       },
       "pages/app/features/settings": {
         "component": "settings"
@@ -149,6 +149,9 @@
       "pages/app/features/savedcontent": {
         "component": "savedcontent"
       },
+      "pages/app/features/watchlater": {
+        "component": "watchlater"
+      },
       "pages/debug/componentstest": {
         "component": "componentstest"
       },
@@ -199,9 +202,9 @@
   "minAPILevel": 1,
   "packageInfo": {
     "toolkit": "2.0.4-beta.3",
-    "timeStamp": "2026-06-24T15:12:19.515Z",
-    "node": "v22.22.3",
-    "platform": "linux",
+    "timeStamp": "2026-08-01T06:11:01.350Z",
+    "node": "v20.18.3",
+    "platform": "win32",
     "arch": "x64",
     "component": true
   }
