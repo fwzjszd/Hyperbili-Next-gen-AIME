@@ -21,7 +21,7 @@
       <text style="margin-top: 25px"></text>
     </scroll>
     <image style="position: absolute; margin-top: 305px" if="{{anims.show_loading}}" src="{{anims.loading_src.value}}"></image>
-    <full-screen-input style="position: absolute" if="{{input_mode}}" @send="GoSearch" @exit="ExitInput"></full-screen-input>
+    <full-screen-input if="{{input_mode}}" @send="GoSearch" @exit="ExitInput"></full-screen-input>
   </div>
 </template>
 

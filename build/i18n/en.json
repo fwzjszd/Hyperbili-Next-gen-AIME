@@ -114,6 +114,7 @@
         "title": "Settings",
         "videoPushRelevance": "Video Recommendation Relevance",
         "videoPushCount": "Number of Recommended Videos on Homepage",
+        "keepScreenOn": "Keep Screen On",
         "enableFullAnimation": "Enable Full Animation",
         "enableCommentImages": "Show Comment Images",
         "performanceSettings": "Performance Settings",

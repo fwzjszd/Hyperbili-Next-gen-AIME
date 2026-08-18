@@ -161,11 +161,11 @@ export default {
         }
       }
 
-      // 默认缩到120px宽显示（对应单帧120px），最大缩放到1200px(10x)
+      // 默认缩放到约360px宽显示，填满预览窗格（窗格宽390px），使缩略图清晰可见
       // 注意：CSS width/height 只影响显示尺寸，不影响实际解码内存
       if (rawWidth > 0) {
-        const displayRatio = 120 / rawWidth
-        this.baseW = 120
+        const displayRatio = 360 / rawWidth
+        this.baseW = 360
         this.baseH = Math.round(rawHeight * displayRatio)
         this.imgW = this.baseW
         this.imgH = this.baseH

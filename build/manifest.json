@@ -10,6 +10,9 @@
   ],
   "features": [
     {
+      "name": "system.app"
+    },
+    {
       "name": "system.router"
     },
     {
@@ -94,8 +97,14 @@
       "pages/video/spriteviewer": {
         "component": "spriteviewer"
       },
+      "pages/video/spriteplayer": {
+        "component": "spriteplayer"
+      },
       "pages/video/chapters": {
         "component": "chapters"
+      },
+      "pages/video/staffselect": {
+        "component": "staffselect"
       },
       "pages/video/subtitleviewer": {
         "component": "subtitleviewer"
@@ -225,8 +234,8 @@
   "minAPILevel": 1,
   "packageInfo": {
     "toolkit": "2.0.4-beta.3",
-    "timeStamp": "2026-08-01T06:46:26.336Z",
-    "node": "v24.14.1",
+    "timeStamp": "2026-08-18T03:46:29.414Z",
+    "node": "v22.16.0",
     "platform": "win32",
     "arch": "x64",
     "component": true

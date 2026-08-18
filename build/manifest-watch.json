@@ -10,6 +10,9 @@
   ],
   "features": [
     {
+      "name": "system.app"
+    },
+    {
       "name": "system.router"
     },
     {
@@ -94,8 +97,14 @@
       "pages/video/spriteviewer": {
         "component": "spriteviewer"
       },
+      "pages/video/spriteplayer": {
+        "component": "spriteplayer"
+      },
       "pages/video/chapters": {
         "component": "chapters"
+      },
+      "pages/video/staffselect": {
+        "component": "staffselect"
       },
       "pages/video/subtitleviewer": {
         "component": "subtitleviewer"

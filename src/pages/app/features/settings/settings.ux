@@ -15,6 +15,11 @@
         <text class="setext_small">{{ $t("settings.videoPushCount") }}</text>
         <text class="countset_num">{{ home_vid_count }}</text>
       </div>
+      <div class="setbase" onclick="ClickCountSet('keep_screen_on')">
+        <image class="seticon" src="/common/settings_startuppage.png"></image>
+        <text class="setext_small">{{ $t("settings.keepScreenOn") }}</text>
+        <text class="countset_num">{{ keepScreenOn ? "开" : "关" }}</text>
+      </div>
       <div class="setbase" onclick="ItemsChangeSet('startup_page')">
         <image class="seticon" src="/common/settings_startuppage.png"></image>
         <text class="setext_small">{{ $t("settings.startupPage") }}</text>
@@ -59,16 +64,20 @@
 <script>
 import router from "@system.router"
 import prompt from "@system.prompt"
+import brightness from "@system.brightness"
 export default {
   private: {
     fresh_type: 3,
     home_vid_count: 10,
+    keepScreenOn: 0,
     startupPage: "主页",
     countset: {
       fresh_type_max: 3,
       fresh_type_min: 1,
       home_vid_count_max: 14,
-      home_vid_count_min: 1
+      home_vid_count_min: 1,
+      keep_screen_on_max: 1,
+      keep_screen_on_min: 0
     },
     scrclass: ""
   },
@@ -110,6 +119,12 @@ export default {
         max: this.countset.home_vid_count_max,
         min: this.countset.home_vid_count_min,
         key: "home_vid_count"
+      },
+      "keep_screen_on": {
+        current: this.keepScreenOn,
+        max: this.countset.keep_screen_on_max,
+        min: this.countset.keep_screen_on_min,
+        key: "keepScreenOn"
       }
     };
 
@@ -117,7 +132,19 @@ export default {
       const { current, max, min, key } = mapping[name];
       const newValue = current < max ? current + 1 : min;
       global.settings.saveSettings({ [key]: newValue });
-      
+
+      if (key === "keepScreenOn") {
+        // 延时到下一帧再应用，脱离点击事件调用栈，避免原生 brightness 桥接死锁
+        const on = newValue === 1
+        setTimeout(function () {
+          try {
+            brightness.setKeepScreenOn({ keepScreenOn: on })
+          } catch (e) {
+            global.logger.log("[settings] setKeepScreenOn error: " + e)
+          }
+        }, 50)
+      }
+
       // 延时更新视图
       setTimeout(() => {
         this.UpdateNumView();
@@ -152,10 +179,29 @@ export default {
   UpdateNumView() {
     this.fresh_type = global.settings.SETTINGS.fresh_type
     this.home_vid_count = global.settings.SETTINGS.home_vid_count
+    this.keepScreenOn = global.settings.SETTINGS.keepScreenOn
     this.startupPage = global.settings.SETTINGS.startupPage
   },
   onInit() {
     this.UpdateNumView()
+  },
+  onShow() {
+    // 对齐 player.ux 的安全写法：onShow 时直接设置，不在点击/onHide 中调用
+    if (this.keepScreenOn === 1) {
+      setTimeout(() => {
+        try {
+          brightness.setKeepScreenOn({ keepScreenOn: true })
+        } catch (e) {
+          global.logger.log("[settings] onShow setKeepScreenOn error: " + e)
+        }
+      }, 50)
+    }
+  },
+  onHide() {
+    // 不在转场时调用任何 brightness 接口，避免原生服务状态不稳定导致死机；
+    // 系统会在应用退到后台/页面切换后自动恢复默认息屏策略
+  },
+  onDestroy() {
   }
 }
 </script>

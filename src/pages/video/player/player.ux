@@ -143,7 +143,6 @@
   import storage from "@system.storage";
   import prompt from "@system.prompt";
   import request from "@system.request";
-  import brightness from "@system.brightness";
   import { asyncFile } from "../../../asyncapi/file";
   export default {
     props: { playlistId: { default: null }, startIndex: { default: 0 }, tracks: { default: null }, bvid: { default: null }, cachedAudioUri: { default: null }, cachedTitle: { default: null }, cachedCoverUrl: { default: null }, cachedAuthor: { default: null }, startTime: { default: 0 }, videoCid: { default: null } },
@@ -184,13 +183,14 @@
       subtitles: [],
       subtitleLoaded: false,
       subtitleLoading: false,
+      subtitleLoadAttempted: false,
       swiperIndex: 1,
       enableVideoSubtitle: true
     },
     getImageUrl(picUrl) {
       if (!picUrl) return '/common/icon/default_album.png';
       if (picUrl.startsWith('internal://files/')) return picUrl;
-      return picUrl + '@319w_150h';
+      return picUrl + '@480w_480h_1e_1c';
     },
     // 根据与当前高亮行的距离计算字幕透明度（Apple Music 风格渐隐效果）
     calculateLyricOpacity(index) {
@@ -207,10 +207,16 @@
     loadVideoSubtitles() {
       const that = this;
       const requestId = that.currentRequestId;
+      // 已经尝试过（无论成功/失败/无字幕）就不再重复请求，避免反复右滑把网卡炸
+      if (that.subtitleLoadAttempted) {
+        global.logger.log("[player loadVideoSubtitles] already attempted, skip");
+        return;
+      }
       that.subtitleLoading = true;
       that.subtitleLoaded = false;
       if (!that.videoBvid) {
         that.subtitleLoading = false;
+        that.subtitleLoadAttempted = true;
         return;
       }
 
@@ -224,6 +230,7 @@
           }
           if (!cid) {
             that.subtitleLoading = false;
+            that.subtitleLoadAttempted = true;
             return;
           }
           const subBody = await global.biliclient.getVideoSubtitles(that.videoBvid, cid);
@@ -232,6 +239,7 @@
             that.lyricLines = [{ text: '暂无字幕' }];
             that.currentLyricIndex = 0;
             that.subtitleLoading = false;
+            that.subtitleLoadAttempted = true;
             return;
           }
           var lines = subBody.map(function(item) {
@@ -242,12 +250,14 @@
           that.currentLyricIndex = -1;
           that.subtitleLoaded = true;
           that.subtitleLoading = false;
+          that.subtitleLoadAttempted = true;
           global.logger.log("[player loadVideoSubtitles] success, lines=" + lines.length);
         } catch (e) {
           global.logger.error("[player loadVideoSubtitles] error: " + (e && e.message ? e.message : e));
           that.lyricLines = [{ text: '字幕加载失败' }];
           that.currentLyricIndex = 0;
           that.subtitleLoading = false;
+          that.subtitleLoadAttempted = true;
         }
       };
       fetchSubtitles();
@@ -268,17 +278,19 @@
       that.subtitles = [];
       that.subtitleLoaded = false;
       that.subtitleLoading = false;
+      that.subtitleLoadAttempted = false;
       // 重新加载
       that.loadVideoSubtitles();
     },
-    // swiper 切换事件：左滑进入字幕页时才按需加载字幕
+    // swiper 切换事件：左滑进入字幕页时才按需加载字幕（只请求一次）
     onSwiperChange(e) {
       const that = this;
       let idx = e && e.index !== undefined ? e.index : e;
       if (typeof idx === 'object') idx = idx.index;
       const subtitlePageIndex = that.newPlayerStyle ? 2 : 1;
       if (that.videoMode && that.enableVideoSubtitle && idx === subtitlePageIndex) {
-        if (!that.subtitleLoaded && !that.subtitleLoading) {
+        // 已经请求过（成功/失败/无字幕）或正在请求中，都不再重复发起
+        if (!that.subtitleLoadAttempted && !that.subtitleLoading) {
           global.logger.log("[player onSwiperChange] swiped to subtitle page, load subtitles now");
           that.loadVideoSubtitles();
         }
@@ -639,15 +651,6 @@
     onShow() {
       const that = this;
       that.loadLyricSettings();
-      // 视频模式下保持屏幕常亮，方便看字幕
-      if (that.videoMode) {
-        brightness.setKeepScreenOn({
-          keepScreenOn: true,
-          fail: function(data, code) {
-            global.logger.log("[player] setKeepScreenOn failed: " + code);
-          }
-        });
-      }
       const hasNewPlaylist = that.playlistId && !(that.fromAppStart || false);
       if (hasNewPlaylist) {
         that.index = that.startIndex || 0;
@@ -676,13 +679,6 @@
     },
     onHide() {
       const that = this;
-      // 退出播放器时关闭屏幕常亮
-      brightness.setKeepScreenOn({
-        keepScreenOn: false,
-        fail: function(data, code) {
-          global.logger.log("[player] setKeepScreenOn(false) failed: " + code);
-        }
-      });
       if (!that.currSong && that.songList && that.songList.length > 0 && that.index >= 0) {
         that.currSong = that.songList[that.index];
       }
@@ -1140,11 +1136,14 @@
                   return;
                 }
                 that.toastLog('校验成功，准备播放');
-                that.currSong.url = result.uri;
-                that.saveVideoAudioToSavedContent(result.uri);
-                setTimeout(() => {
-                  that.playCurrentSong();
-                }, 300);
+                that.saveVideoAudioToSavedContent(result.uri).then((persistedUri) => {
+                  // 保存时会把临时 cache 文件移动到持久目录，原 result.uri 已失效，
+                  // 必须使用返回的持久路径播放，否则会出现 file doesn't exist。
+                  that.currSong.url = persistedUri || result.uri;
+                  setTimeout(() => {
+                    that.playCurrentSong();
+                  }, 300);
+                });
               }).catch((error) => {
                 that.toastLog('校验异常，回退直链');
                 that.currSong.url = audioUrl;
@@ -1198,11 +1197,12 @@
                   that.playCurrentSong();
                   return;
                 }
-                that.currSong.url = result.uri;
-                that.saveVideoAudioToSavedContent(result.uri);
-                setTimeout(() => {
-                  that.playCurrentSong();
-                }, 300);
+                that.saveVideoAudioToSavedContent(result.uri).then((persistedUri) => {
+                  that.currSong.url = persistedUri || result.uri;
+                  setTimeout(() => {
+                    that.playCurrentSong();
+                  }, 300);
+                });
               }).catch((error) => {
                 that.toastLog('校验异常，回退直链');
                 that.currSong.url = audioUrl;
@@ -1224,16 +1224,17 @@
     async saveVideoAudioToSavedContent(audioUri) {
       const that = this;
       try {
-        const exists = await global.savedcontent.SavedContentManager.checkVideoAudioExists(that.videoBvid);
-        if (exists) {
-          return;
+        const existing = await global.savedcontent.SavedContentManager.checkVideoAudioExists(that.videoBvid);
+        if (existing && existing.fileUri) {
+          // 已有持久化缓存，直接返回其路径供播放
+          return existing.fileUri;
         }
 
         const title = that.currSong.name || '未知视频';
         const coverUrl = that.cachedCoverUri || that.currSong.al.picUrl || '';
         const author = (that.currSong.ar && that.currSong.ar[0] && that.currSong.ar[0].name) || '未知作者';
 
-        await global.savedcontent.SavedContentManager.storeVideoAudio(
+        const result = await global.savedcontent.SavedContentManager.storeVideoAudio(
           title,
           audioUri,
           coverUrl,
@@ -1241,7 +1242,10 @@
           that.videoBvid
         );
         prompt.showToast({ message: '已保存到缓存列表', duration: 2000 });
+        return (result && result.uri) || audioUri;
       } catch (e) {
+        // 保存失败时回退到原始下载路径，避免无法播放
+        return audioUri;
       }
     },
     async validateM4sFile(uri) {

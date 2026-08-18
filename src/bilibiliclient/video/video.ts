@@ -62,7 +62,8 @@ export const BilibiliClientVideoMethods = {
     //   frameCount >= 24 → index=2 (约50帧)
     //   frameCount >= 15 → index=3 (约20-30帧)
     //   frameCount < 15  → index=4 (约10-15帧，单帧最大)
-    async getVideoFramesByAID(this: any, aid: string, frameCount?: number): Promise<any> {
+    //   frameCount = 0/不传 → index=1，拉取该视频全部雪碧图（长视频会有多张）
+    async getVideoFramesByAID(this: any, aid: string, frameCount?: number, targetFrameSize?: number): Promise<any> {
         // 根据期望帧数计算 API index 参数
         let apiIndex = 1;
         if (frameCount && frameCount > 0) {
@@ -81,41 +82,68 @@ export const BilibiliClientVideoMethods = {
         const cols = data.img_x_len || data.img_cols || 10;
         const rows = data.img_y_len || data.img_rows || 10;
 
-        // 计算实际使用的帧数和行数（index 数组长度 = 实际帧数，后面空白帧是黑色）
-        // 如果指定了 frameCount 且小于 API 返回的总帧数，裁剪为指定帧数
-        const rawFrames = data.index && Array.isArray(data.index) ? data.index.length : cols * rows;
-        const limitedFrames = (frameCount && frameCount > 0 && frameCount < rawFrames) ? frameCount : rawFrames;
-        const actualRows = Math.ceil(limitedFrames / cols);
-        global.logger.log("[getVideoFramesByAID] apiIndex=" + apiIndex + " rawFrames=" + rawFrames
-            + " limitedFrames=" + limitedFrames + " actualRows=" + actualRows + " of " + rows
-            + " frameCount=" + frameCount);
+        // data.index 数组长度 = 整个视频全部有效帧总数（跨所有雪碧图）。
+        // 长视频会返回多张 10×10 雪碧图，必须全部下载，否则只能看到前100帧。
+        const gridPerImage = cols * rows;
+        const totalValidFrames = data.index && Array.isArray(data.index)
+            ? data.index.length
+            : data.image.length * gridPerImage;
+        // 若调用方显式限制帧数（frameCount>0），则裁剪到该数量；0 表示全部
+        const limitedFrames = (frameCount && frameCount > 0 && frameCount < totalValidFrames)
+            ? frameCount : totalValidFrames;
+        // 实际需要的雪碧图张数（每张满 gridPerImage 帧）
+        const neededImages = Math.max(1, Math.ceil(limitedFrames / gridPerImage));
+        if (data.image.length > neededImages) {
+            data.image = data.image.slice(0, neededImages);
+        }
+        // 最后一张雪碧图的有效行数（前面的张都是满 rows 行）
+        const framesInLast = limitedFrames - (neededImages - 1) * gridPerImage;
+        const lastImageRows = Math.max(1, Math.ceil(framesInLast / cols));
+        // crop_rows 给单张预览用：多图时表示末张有效行；单图时即全部有效行
+        const actualRows = neededImages > 1 ? rows : Math.ceil(limitedFrames / cols);
+        data.crop_rows = actualRows;
+        data.total_frames = limitedFrames;
+        data.image_count = data.image.length;
+        data.last_image_rows = neededImages > 1 ? lastImageRows : actualRows;
+        global.logger.log("[getVideoFramesByAID] apiIndex=" + apiIndex
+            + " totalValidFrames=" + totalValidFrames + " limitedFrames=" + limitedFrames
+            + " images=" + data.image.length + " gridPerImage=" + gridPerImage
+            + " lastImageRows=" + data.last_image_rows);
 
-        // 目标：单帧长度约为120像素，尽量用满4MB内存上限
-        // 以 10×10 网格、16:9 帧（160×90）计算：120×10=1200，1200×675≈810000像素×4字节≈3.24MB，约19%余量
-        const targetFrameSize = 120;
+        // 目标：单帧宽度。低画质（查看雪碧图）用 120；高画质（逐帧裁切播放）用 100。
+        // 以 10×10 网格、16:9 帧计算解码内存（RGBA 4字节/像素）：
+        //   100 → 1000×540 ≈ 2.16MB（播放页 4MB 阈值内，避免手表解码重启）
+        //   120 → 1200×675 ≈ 3.24MB（viewer 4MB阈值内）
+        const targetSize = (targetFrameSize && targetFrameSize > 0) ? targetFrameSize : 120;
         const rawWidth = imgX * cols;
         const rawHeight = imgY * rows;
         const usedHeight = imgY * actualRows; // 实际使用的区域高度（不含底部黑色空白）
 
-        // 如果原始单帧已经小于等于targetFrameSize，不需要压缩
-        if (imgX <= targetFrameSize) {
-            global.logger.log("[getVideoFramesByAID] no resize needed, img_x=" + imgX + " <= " + targetFrameSize);
+        // 如果原始单帧已经小于等于目标尺寸，不需要压缩
+        if (imgX <= targetSize) {
+            global.logger.log("[getVideoFramesByAID] no resize needed, img_x=" + imgX + " <= " + targetSize);
             data.crop_rows = actualRows;
+            data.total_frames = limitedFrames;
+            data.image_count = data.image.length;
+            data.last_image_rows = neededImages > 1 ? lastImageRows : actualRows;
+            data.frameList = this.buildVideoFrameCropList(data);
             return data;
         }
 
-        // 计算缩放比例，使单帧宽度约为targetFrameSize
-        const ratio = targetFrameSize / imgX;
+        // 计算缩放比例，使单帧宽度约为targetSize
+        const ratio = targetSize / imgX;
         const newTotalWidth = Math.floor(rawWidth * ratio);
         const newTotalHeight = Math.floor(rawHeight * ratio);
         const usedCropHeight = Math.floor(usedHeight * ratio);
 
-        global.logger.log("[getVideoFramesByAID] resizing: img_x=" + imgX + " -> " + targetFrameSize
+        global.logger.log("[getVideoFramesByAID] resizing: img_x=" + imgX + " -> " + targetSize
             + ", total=" + rawWidth + "x" + rawHeight + " -> " + newTotalWidth + "x" + newTotalHeight
             + ", used=" + rawWidth + "x" + usedHeight + " (crop " + actualRows + " rows)");
 
         // 使用B站CDN缩放参数 @widthw.jpg（仅按宽度等比缩放，保持纵横比）
         // 注意：不要用 @widthw_heighth.jpg，固定宽高会强制拉伸图片导致变形
+        // 保留原始 CDN 地址，用于逐帧裁切（逐帧用原图坐标，不能用缩放后地址）
+        const originalImages = data.image.slice();
         const newImages = data.image.map(function(imgUrl) {
             if (!imgUrl) return imgUrl;
             const atIdx = imgUrl.indexOf('@');
@@ -128,18 +156,66 @@ export const BilibiliClientVideoMethods = {
         });
 
         data.image = newImages;
+        // 逐帧裁切列表必须使用【原始 CDN 地址 + 原始单帧尺寸】，否则坐标会错乱
+        const frameSource = {
+            image: originalImages,
+            img_x_size: imgX, img_y_size: imgY,
+            img_x_len: cols, img_y_len: rows,
+            total_frames: limitedFrames,
+            index: data.index
+        };
+        data.frameList = this.buildVideoFrameCropList(frameSource);
         // 注意：同时更新 img_x_size/img_y_size（B站API原始字段名）和 img_x/img_y（自定义字段名）
         // spriteviewer 读取时优先使用 img_x_size，必须同步更新
-        data.img_x = targetFrameSize;
-        data.img_x_size = targetFrameSize;
+        data.img_x = targetSize;
+        data.img_x_size = targetSize;
         data.img_y = Math.floor(imgY * ratio);
         data.img_y_size = Math.floor(imgY * ratio);
         data.crop_rows = actualRows; // 实际有效行数，给 sprite viewer 用
+        data.total_frames = limitedFrames;
+        data.image_count = data.image.length;
+        data.last_image_rows = neededImages > 1 ? lastImageRows : actualRows;
 
         global.logger.log("[getVideoFramesByAID] resized URLs: " + newImages.slice(0, 2).join(" || ")
             + " img_x=" + data.img_x + " img_y=" + data.img_y
             + " total=" + newTotalWidth + "x" + newTotalHeight);
         return data;
+    },
+
+    // 根据雪碧图数据构建“逐帧 CDN 裁切地址”列表。
+    // 裁切后缀格式：baseUrl@x-y-w-ha.jpg（B站图片 CDN 服务端裁切，区域左上角 x,y 与宽高 w,h）
+    buildVideoFrameCropList(this: any, data: any): string[] {
+        if (!data || !data.image || data.image.length === 0) return [];
+        const cols = data.img_x_len || data.img_cols || 10;
+        const rows = data.img_y_len || data.img_rows || 10;
+        const cropW = data.img_x_size || data.img_x || 160;
+        const cropH = data.img_y_size || data.img_y || 90;
+        const framesPerImage = cols * rows;
+        const totalFrames = data.total_frames
+            || (data.index && Array.isArray(data.index) ? data.index.length : data.image.length * framesPerImage);
+        const list: string[] = [];
+        for (let i = 0; i < totalFrames; i++) {
+            const spriteIdx = Math.floor(i / framesPerImage);
+            if (spriteIdx >= data.image.length) break;
+            const posInSheet = i % framesPerImage;
+            const col = posInSheet % cols;
+            const row = Math.floor(posInSheet / cols);
+            const x = col * cropW;
+            const y = row * cropH;
+            let baseUrl = data.image[spriteIdx];
+            // 去掉已有的缩放/裁切后缀（@xxx.jpg），还原为 CDN 原图基址
+            const atIdx = baseUrl.indexOf('@');
+            if (atIdx > 0) baseUrl = baseUrl.substring(0, atIdx);
+            if (!baseUrl.endsWith('.jpg')) {
+                const dotIdx = baseUrl.lastIndexOf('.');
+                if (dotIdx > 0) baseUrl = baseUrl.substring(0, dotIdx) + '.jpg';
+            }
+            // B站 videoshot 接口返回的是协议相对地址（//i0.hdslb.com/...），
+            // 手表 <image> 无法识别无协议地址，必须补全 https: 前缀，否则逐帧全黑。
+            if (baseUrl.indexOf('//') === 0) baseUrl = 'https:' + baseUrl;
+            list.push(baseUrl + '@' + x + '-' + y + '-' + cropW + '-' + cropH + 'a.jpg');
+        }
+        return list;
     },
 
     // 获取视频字幕列表
@@ -333,11 +409,13 @@ export const BilibiliClientVideoMethods = {
         if (!cid) {
             throw new Error("cid not found");
         }
-        return this.getVideoBestAudioUrlByCid(bvid, cid);
+        return this.getVideoBestAudioUrlStringByCid(bvid, cid);
     },
 
     // 根据指定bvid+cid获取最佳音频URL（用于分P）
-    async getVideoBestAudioUrlByCid(this: any, bvid: string, cid: string): Promise<string> {
+    // 返回 { url, bandwidth, duration, estimatedSize }
+    // estimatedSize 为根据码率×时长估算的总字节数（DASH音频无Content-Length时用于进度显示）
+    async getVideoBestAudioUrlByCid(this: any, bvid: string, cid: string): Promise<any> {
         if (!cid) {
             throw new Error("cid is empty");
         }
@@ -361,7 +439,11 @@ export const BilibiliClientVideoMethods = {
         const dashData = payload.data && payload.data.dash ? payload.data.dash : (payload.dash || null);
         const dash = dashData;
         const audioTracks = dash && dash.audio ? dash.audio : [];
-        global.logger.log("[getVideoBestAudioUrlByCid] audioTracks length:", audioTracks.length);
+        // 时长（毫秒），DASH 层或 payload.data 层都可能携带
+        const durationMs = (dash && (dash.duration || dash.Duration))
+            || (payload.data && (payload.data.timelength || payload.data.duration))
+            || 0;
+        global.logger.log("[getVideoBestAudioUrlByCid] audioTracks length:", audioTracks.length, "durationMs:", durationMs);
         if (!audioTracks.length) {
             const keys = Object.keys(payload.data || payload || {});
             global.logger.error("[getVideoBestAudioUrlByCid] no audio tracks, payload keys:", keys);
@@ -394,8 +476,70 @@ export const BilibiliClientVideoMethods = {
         });
 
         const selected = uniqueCandidates[0];
-        global.logger.log("[getVideoBestAudioUrlByCid] selected url:", selected ? selected.slice(0, 100) + "..." : "null");
-        return selected;
+        const bandwidth = best.bandwidth || 0;
+        // 估算总大小（字节）：码率(bps) × 时长(秒) / 8
+        const estimatedSize = (bandwidth > 0 && durationMs > 0)
+            ? Math.floor((bandwidth * (durationMs / 1000)) / 8)
+            : 0;
+        global.logger.log("[getVideoBestAudioUrlByCid] selected url:", selected ? selected.slice(0, 100) + "..." : "null",
+            "bandwidth:", bandwidth, "estimatedSize:", estimatedSize);
+        return {
+            url: selected,
+            bandwidth: bandwidth,
+            durationMs: durationMs,
+            estimatedSize: estimatedSize
+        };
+    },
+
+    // 兼容旧调用：仅返回URL字符串
+    async getVideoBestAudioUrlStringByCid(this: any, bvid: string, cid: string): Promise<string> {
+        const info = await this.getVideoBestAudioUrlByCid(bvid, cid);
+        return info && info.url ? info.url : "";
+    },
+
+    // 获取远程音频文件的真实字节大小。
+    // DASH 的 m4s CDN 通常支持 Range，发起 bytes=0-0 请求后从
+    // Content-Range: bytes 0-0/<total> 中解析总长度；
+    // 若不支持 Range，则回退到 Content-Length。失败返回 0。
+    async getRemoteAudioSize(this: any, audioUrl: string, referer: string): Promise<number> {
+        if (!audioUrl) return 0;
+        const header: any = {
+            "Range": "bytes=0-0",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        };
+        if (referer) header["Referer"] = referer;
+        try {
+            const response = await this.fetch.fetch({
+                url: audioUrl,
+                method: "GET",
+                responseType: "text",
+                header: header
+            });
+            const headers = (response && (response.header || response.headers)) || {};
+            // 头字段名大小写在不同引擎上可能不同，统一找一遍
+            function findHeader(name: string): string {
+                const target = name.toLowerCase();
+                const keys = Object.keys(headers);
+                for (let i = 0; i < keys.length; i++) {
+                    if (keys[i].toLowerCase() === target) return headers[keys[i]];
+                }
+                return "";
+            }
+            const contentRange = findHeader("Content-Range") || findHeader("Content-range");
+            if (contentRange) {
+                // 形如 bytes 0-0/12345678 或 bytes 0-0/*
+                const slashIdx = contentRange.lastIndexOf("/");
+                if (slashIdx >= 0) {
+                    const total = parseInt(contentRange.substring(slashIdx + 1), 10);
+                    if (!isNaN(total) && total > 0) return total;
+                }
+            }
+            const contentLength = parseInt(findHeader("Content-Length"), 10);
+            if (!isNaN(contentLength) && contentLength > 0) return contentLength;
+        } catch (e) {
+            global.logger.error("[getRemoteAudioSize] error: " + (e && e.toString ? e.toString() : e));
+        }
+        return 0;
     },
 
 };

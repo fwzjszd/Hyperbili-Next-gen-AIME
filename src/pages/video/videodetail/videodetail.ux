@@ -17,9 +17,9 @@
           </image>
           <text class="statext">{{ stat_view }}</text>
         </div>
-        <div class="stat" style="margin-left: 10px" @click="OpenOwnerHome">
+        <div class="stat" style="margin-left: 10px" @click="OnUpClick">
           <image class="statimg" src="/common/uploadericon.png" style="width: 27px; height: 29px"></image>
-          <text class="statext">{{ vid.owner.name }}</text>
+          <text class="statext">{{ hasStaff ? (vid.owner.name + '等' + vid.staff.length + '位UP主') : vid.owner.name }}</text>
         </div>
       </div>
       <scroll scroll-x="true" class="vidtoolbar" style="margin-top: 25px" bounces="true">
@@ -55,7 +55,7 @@
         </div>
         <div class="vidtool watchonphone" @click="WatchOnPhone()">
           <image class="vidtoolimg" src="/common/vidtool_watchonphone.png"></image>
-          <text class="vidtooltext watchonphonetext">在手机上观看</text>
+          <text class="vidtooltext watchonphonetext">在手机上看</text>
         </div>
       </scroll>
 
@@ -77,7 +77,7 @@
       <default-button text="video.sendReply" margin-top="20px" @click="Reply"></default-button>
       <image src="/common/featurebtn_replyarea.png" style="margin-top: 15px" @click="GoReplyArea()"></image>
     </scroll>
-    <full-screen-input style="position: absolute" if="{{replymode}}" @send="SendReply"
+    <full-screen-input if="{{replymode}}" @send="SendReply"
       @exit="ExitInput"></full-screen-input>
   </div>
 </template>
@@ -133,6 +133,9 @@ export default {
       const m = (d.getMonth() + 1).toString().padStart(2, "0")
       const day = d.getDate().toString().padStart(2, "0")
       return `发布日期：${y}-${m}-${day}`
+    },
+    hasStaff() {
+      return !!(this.vid && this.vid.staff && this.vid.staff.length > 0)
     }
   },
   onInit() {
@@ -173,6 +176,29 @@ export default {
         uid: this.vid.owner.mid
       }
     })
+  },
+  // 点击 UP 栏：联合制作视频进入创作者选择页，否则直接进入 UP 主主页
+  OnUpClick() {
+    if (this.hasStaff) {
+      const staffList = this.vid.staff.map(function (s) {
+        return {
+          mid: s.mid,
+          name: s.name,
+          face: s.face || '',
+          title: s.title || '',
+          sign: s.sign || ''
+        }
+      })
+      router.push({
+        uri: "pages/video/staffselect",
+        params: {
+          staff: JSON.stringify(staffList),
+          videoTitle: this.vid.title || ''
+        }
+      })
+    } else {
+      this.OpenOwnerHome()
+    }
   },
   async GetVideoDetail() {
     this.vid = await global.biliclient.getVideoInfoByBVID(this.bvid)

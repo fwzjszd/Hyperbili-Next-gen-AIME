@@ -58,7 +58,7 @@
     </scroll>
     <sendbox input_text="{{input_text}}" @clickinput="OpenInput" @clicksend="SendMsg" style="position: absolute">
     </sendbox>
-    <full-screen-input style="position: absolute" if="{{inputmode}}" @send="FinishInput"
+    <full-screen-input if="{{inputmode}}" @send="FinishInput"
       @exit="ExitInput"></full-screen-input>
   </div>
 </template>

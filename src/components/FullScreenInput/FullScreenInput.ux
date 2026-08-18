@@ -2,53 +2,161 @@
 
 <template>
     <div class="inputpanel">
-        <input-method if="{{global_show}}" style="position: absolute" hide={{keyboardHide}} @complete="InputEvent" @delete="InputDelete" screentype="{{screentype}}" vibratemode="short"></input-method>
-        <div class="inputactions">
-            <div style="margin-left: 35px" @click="ExitInput">
-                <image class="inputaction_img" src="/common/textinput_back.png"></image>
-            </div>
-            <div style="margin-left: 75px" @click="InputFinish">
-                <image class="inputaction_img" src="/common/textinput_finish.png"></image>
-            </div>
+        <!-- 顶部操作栏：参考 useful.js，按键固定小尺寸居中排列，互不挤压 -->
+        <div class="toolbar">
+            <image class="toolimg" src="/common/textinput_back.png" @click="ExitInput"></image>
+            <text class="toolbtn" @click="ToggleKeyboard">{{ keyboardtype === 'T9' ? '二十六键' : '九键' }}</text>
+            <image class="toolimg" src="/common/textinput_finish.png" @click="InputFinish"></image>
         </div>
-        <div class="inputshow">
-            <text class="inputshow_text">{{ input_text }}</text>
+        <!-- 输入卡片：宽度铺满、占满键盘外空间；输入内容随光标位置自动滚动 -->
+        <div class="inputcard">
+            <scroll id="inputscroll" scroll-y="true" class="inputscroll">
+                <text class="inputtext" style="{{textStyle}}">{{ displayVersion >= 0 ? getDisplayText('content') : '' }}</text>
+            </scroll>
         </div>
+        <!-- 功能键由 InputMethod 内置光标键盘提供（数字模式下切换）：复制/剪切/粘贴/全选/方向/选择 -->
+        <!-- 两个互斥的 input-method，切换键盘类型时销毁重建；必须传 hide=false 才会渲染 -->
+        <input-method if="{{global_show && keyboardtype === 'QWERTY'}}" hide="{{false}}" keyboardtype="QWERTY" @complete="HandleComplete" @delete="HandleDelete" @cursormove="HandleCursorMove" @cursorselect="HandleCursorSelect" @copy="Copy" @paste="Paste" @cut="Cut" @selectall="SelectAll" screentype="{{screentype}}" vibratemode="short"></input-method>
+        <input-method if="{{global_show && keyboardtype === 'T9'}}" hide="{{false}}" keyboardtype="T9" @complete="HandleComplete" @delete="HandleDelete" @cursormove="HandleCursorMove" @cursorselect="HandleCursorSelect" @copy="Copy" @paste="Paste" @cut="Cut" @selectall="SelectAll" screentype="{{screentype}}" vibratemode="short"></input-method>
     </div>
 </template>
 
 <script>
+import { initKeyboard } from '../../keyboard'
+
 export default {
     props: {
         keyboardHide: {
             default: false
+        },
+        maxlength: {
+            default: 200
         }
     },
     data: {
         global_show: false,
-        input_text: "",
-        screentype: ""
+        screentype: "",
+        keyboardtype: "QWERTY",
+        hasClipboard: false,
+        currentField: 'content',
+        textParts: { content: ['', ''] },
+        anchor: null,
+        preferredColumn: -1,
+        displayVersion: 0,
+        textHeight: 80,
+        textStyle: { height: '80px' }
     },
-    InputEvent(evt){
-        this.input_text += evt.detail.content
+    computed: {
+        inputLen() {
+            const parts = this.textParts.content
+            return parts ? parts[0].length + parts[1].length : 0
+        }
     },
-    InputDelete(){
-        this.input_text = this.input_text.slice(0, -1)
+    onInit() {
+        this.screentype = (global.DEVICE_INFO && global.DEVICE_INFO.screenShape) || 'circle'
+        this.hasClipboard = !!(global.paste && global.paste.text)
+        this.global_show = true
+        initKeyboard(this)
     },
-    ExitInput(){
+    onReady() {
+        this.UpdateTextLayout()
+    },
+    RefreshDisplay() {
+        this.displayVersion++
+        this.hasClipboard = !!(global.paste && global.paste.text)
+        this.UpdateTextLayout()
+    },
+    // 计算某段文本在指定每行字符数下所占的行数（含硬换行与自动换行）
+    CountLines(str, charsPerLine) {
+        if (!str) return 1
+        let line = 1
+        let col = 0
+        for (let i = 0; i < str.length; i++) {
+            const code = str.charCodeAt(i)
+            if (code === 10) {
+                line++
+                col = 0
+            } else {
+                col++
+                if (col >= charsPerLine) {
+                    line++
+                    col = 0
+                }
+            }
+        }
+        return line
+    },
+    // 更新文本高度并随光标滚动：
+    // 1. 显式设置 text 高度为「全文行数 × 行高」，让 scroll 内容真正超出容器，否则 scrollTo 无效；
+    // 2. 等下一帧布局完成后，再把光标所在行滚动到可视区域。
+    UpdateTextLayout() {
+        const parts = this.textParts[this.currentField]
+        if (!parts) return
+        const screenW = (global.DEVICE_INFO && global.DEVICE_INFO.screenWidth) || 480
+        const innerW = screenW - 24 - 32
+        const fontSize = 28
+        const lineHeight = 40
+        const charsPerLine = Math.max(1, Math.floor(innerW / fontSize))
+
+        const fullText = (parts[0] || '') + (parts[1] || '')
+        const totalLines = Math.max(1, this.CountLines(fullText, charsPerLine))
+        // 文本必须有明确高度才能撑开 scroll 滚动区：高度 = 全文行数 × 行高
+        this.textHeight = totalLines * lineHeight
+        this.textStyle = { height: this.textHeight + 'px' }
+
+        const cursorLines = Math.max(1, this.CountLines(parts[0] || '', charsPerLine))
+        const targetTop = (cursorLines - 1) * lineHeight
+        setTimeout(() => {
+            const el = this.$element('inputscroll')
+            if (el && el.scrollTo) {
+                el.scrollTo({ top: targetTop, left: 0, behavior: 'smooth' })
+            }
+        }, 16)
+    },
+    ToggleKeyboard() {
+        this.keyboardtype = this.keyboardtype === 'T9' ? 'QWERTY' : 'T9'
+    },
+    HandleComplete(evt) {
+        if (this.inputLen >= this.maxlength) return
+        this.onInputComplete(evt)
+        this.RefreshDisplay()
+    },
+    HandleDelete() {
+        this.onInputDelete()
+        this.RefreshDisplay()
+    },
+    HandleCursorMove(evt) {
+        this.onCursorMove(evt.detail.direction)
+        this.RefreshDisplay()
+    },
+    HandleCursorSelect() {
+        this.onCursorSelect()
+        this.RefreshDisplay()
+    },
+    SelectAll() {
+        this.onSelectAll()
+        this.RefreshDisplay()
+    },
+    Copy() {
+        this.onCopy()
+        this.RefreshDisplay()
+    },
+    Cut() {
+        this.onCut()
+        this.RefreshDisplay()
+    },
+    Paste() {
+        if (!this.hasClipboard) return
+        this.onPaste()
+        this.RefreshDisplay()
+    },
+    ExitInput() {
         this.$emit("exit")
     },
-    InputFinish(){
+    InputFinish() {
         this.$emit("send", {
-            content: this.input_text
+            content: this.textParts.content.join('')
         })
-    },
-    async InitScreenType(){
-        this.screentype = global.DEVICE_INFO.screenShape
-        this.global_show = true
-    },
-    onInit(){
-        this.InitScreenType()
     }
 }
 </script>
@@ -58,35 +166,75 @@ export default {
 
 .inputpanel {
   position: absolute;
-  width: @screenWidth;
-  height: @screenHeight;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
   background-color: black;
-  justify-content: center;
 }
 
-.inputactions {
+/* 顶部操作栏：参考 useful.js 工具栏，按键固定小尺寸居中排列 */
+.toolbar {
+  position: absolute;
+  top: 12px;
+  left: 0;
+  width: 100%;
+  height: 48px;
   flex-direction: row;
   align-items: center;
-  width: 50%;
-  position: absolute;
-  margin-top: 30px;
-  height: 65px;
-  align-items: center;
+  justify-content: center;
+  z-index: 10;
 }
 
-.inputaction_img {
-  width: 35px;
-  height: 35px;
+.toolimg {
+  width: 36px;
+  height: 36px;
   object-fit: scale-down;
+  margin-left: 10px;
+  margin-right: 10px;
 }
 
-.inputshow {
-  width: 65%;
+.toolbtn {
+  height: 36px;
+  line-height: 36px;
+  font-size: 22px;
+  color: #FB7299;
+  background-color: #262626;
+  border: 2px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+  padding-left: 14px;
+  padding-right: 14px;
+  margin-left: 10px;
+  margin-right: 10px;
+  text-align: center;
+}
+
+/* 输入卡片：宽度铺满、从顶部操作栏下方一直到功能键上方 */
+.inputcard {
   position: absolute;
-  margin-top: 100px;
+  top: 72px;
+  left: 12px;
+  right: 12px;
+  height: 120px;
+  background-color: #1a1a1a;
+  border-radius: 14px;
+  border: 2px solid #333333;
+  padding: 16px;
+  z-index: 5;
 }
 
-.inputshow_text {
-  font-size: 24px;
+.inputscroll {
+  width: 100%;
+  height: 100%;
+}
+
+.inputtext {
+  width: 100%;
+  font-size: 28px;
+  line-height: 40px;
+  color: #ffffff;
+  lines: 200;
+  text-overflow: clip;
+  text-align: left;
 }
 </style>

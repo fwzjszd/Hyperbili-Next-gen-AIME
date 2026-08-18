@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="content">
-      <text class="title">在手机上观看</text>
+      <text class="title">在手机上看</text>
       <text class="subtitle">使用哔哩哔哩App扫码打开</text>
       <div class="qr-wrapper">
         <qrcode value="{{qrValue}}" show="{{showQR}}" style="width: 210px; height: 210px"></qrcode>
@@ -16,7 +16,6 @@
 
 <script>
 import router from "@system.router"
-import brightness from "@system.brightness"
 
 export default {
   public: {
@@ -29,19 +28,12 @@ export default {
     showQR: false
   },
   onInit() {
-    // 设置屏幕常亮
-    brightness.setKeepScreenOn({ keepScreenOn: true })
-    
     // 生成QR码内容：B站视频URL；分P视频携带页码，确保扫码打开当前分P
     const page = Number(this.pageNum) || 1
     this.qrValue = page > 1
       ? `https://www.bilibili.com/video/${this.bvid}?p=${page}`
       : `https://www.bilibili.com/video/${this.bvid}`
     this.showQR = true
-  },
-  onDestroy() {
-    // 退出时关闭屏幕常亮
-    brightness.setKeepScreenOn({ keepScreenOn: false })
   },
   ExitPage() {
     router.back()

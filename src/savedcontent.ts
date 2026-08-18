@@ -14,6 +14,7 @@ interface StoredContent {
 let storageIndex: StoredContent[] = [];
 
 const baseUri = 'internal://files/bilisavedcontent/';
+const audioDirUri = `${baseUri}audio/`;
 const indexFileUri = `${baseUri}index.json`;
 
 // 同步 storageIndex 到本地文件
@@ -78,24 +79,62 @@ export class SavedContentManager {
     }
   }
 
-  // 存储视频音频（直接引用已存在的文件）
-  static async storeVideoAudio(title: string, audioUri: string, coverUrl: string, author: string, bvid: string): Promise<string | void> {
+  // 存储视频音频：把下载产生的临时文件（通常在 cache 目录，会被系统清理）
+  // 移动到持久化的 files/bilisavedcontent/audio/ 目录，再把持久路径写入索引。
+  // 否则播放时引用的 cache 文件已不存在，报 errno=-2 / file doesn't exist。
+  static async storeVideoAudio(title: string, audioUri: string, coverUrl: string, author: string, bvid: string): Promise<{ id: string; uri: string } | void> {
     try {
       const id = generateUUID();
+      let persistedUri = audioUri;
+
+      // 仅当来源不是持久目录时才需要搬运（cache/tmp 等临时路径）
+      if (audioUri && audioUri.indexOf(audioDirUri) !== 0) {
+        // 确保音频目录存在（recursive 兼容已存在的情况）
+        try {
+          await asyncFile.mkdir({ uri: audioDirUri, recursive: true });
+        } catch (e) {
+          // 目录已存在等情况可忽略
+        }
+
+        // 保留原始扩展名（通常为 .m4s），避免音频组件因后缀无法识别
+        let ext = '.m4s';
+        const dotIdx = audioUri.lastIndexOf('.');
+        if (dotIdx > 0) {
+          const tail = audioUri.substring(dotIdx);
+          // 去掉查询串/路径分隔，只取纯扩展名
+          const clean = tail.split(/[?\/]/)[0];
+          if (clean && clean.length <= 6) ext = clean;
+        }
+        const dstUri = `${audioDirUri}${id}${ext}`;
+
+        try {
+          // 优先移动（同分区/同卷下更快）；失败则回退为复制
+          await asyncFile.move({ srcUri: audioUri, dstUri });
+          persistedUri = dstUri;
+        } catch (moveErr) {
+          global.logger.log(`[SavedContentManager] move audio failed, fallback to copy: ${moveErr.toString()}`);
+          await asyncFile.copy({ srcUri: audioUri, dstUri });
+          persistedUri = dstUri;
+          // 复制成功后尝试删除临时源文件，失败不影响结果
+          try {
+            await asyncFile.delete({ uri: audioUri });
+          } catch (e) {}
+        }
+      }
 
       storageIndex.push({
         id,
         title,
         type: 'videoAudio',
-        fileUri: audioUri,
+        fileUri: persistedUri,
         coverUrl,
         author,
         bvid
       });
       await saveStorageIndex();
 
-      global.logger.log(`[SavedContentManager] 视频音频已保存: ${title}, id: ${id}`);
-      return id;
+      global.logger.log(`[SavedContentManager] 视频音频已保存: ${title}, id: ${id}, uri: ${persistedUri}`);
+      return { id, uri: persistedUri };
     } catch (e) {
       global.logger.error(`[SavedContentManager] storeVideoAudio Error: ${e.toString()}`);
     }
@@ -126,10 +165,11 @@ export class SavedContentManager {
     return exists;
   }
 
-  // 检查视频音频是否已存在
-  static async checkVideoAudioExists(bvid: string): Promise<boolean> {
-    const exists = storageIndex.some(item => item.bvid === bvid && item.type === 'videoAudio');
-    return exists;
+  // 检查指定 bvid 的视频音频是否已存在；存在则返回该条索引（含 fileUri），否则返回 null。
+  // 旧调用方按布尔判断依然可用（对象为 truthy、null 为 falsy）。
+  static async checkVideoAudioExists(bvid: string): Promise<any> {
+    const item = storageIndex.find(entry => entry.bvid === bvid && entry.type === 'videoAudio');
+    return item || null;
   }
 
   // 存储视频字幕内容（按 bvid+lang 区分）

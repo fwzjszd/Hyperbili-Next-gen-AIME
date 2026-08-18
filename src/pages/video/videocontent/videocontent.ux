@@ -14,6 +14,9 @@
         </div>
 
         <div class="action-row" if="{{spriteCached}}">
+          <div class="action-btn action-play" @click="PlaySprite()">
+            <text class="action-btn-text">播放</text>
+          </div>
           <div class="action-btn action-view" @click="OpenSpriteViewer()">
             <text class="action-btn-text">查看</text>
           </div>
@@ -64,6 +67,7 @@
       <div class="dl-dialog">
         <text class="dl-title">正在下载</text>
         <text class="dl-progress">{{downloadProgressText}}</text>
+        <text class="dl-count" if="{{downloadCountText}}">{{downloadCountText}}</text>
         <div class="dl-bar-bg">
           <div class="dl-bar" style="width: {{downloadProgressPercent}}%"></div>
         </div>
@@ -77,7 +81,6 @@
 import router from "@system.router"
 import prompt from "@system.prompt"
 import request from "@system.request"
-import brightness from "@system.brightness"
 import { asyncFile } from "../../../asyncapi/file"
 
 export default {
@@ -103,29 +106,17 @@ export default {
     showDownloadDialog: false,
     downloadProgressText: '',
     downloadProgressPercent: 0,
+    downloadCountText: '',
+    audioTotalSize: 0,
+    audioDownloadedSize: 0,
+    audioSizeTimer: null,
 
     cacheKeySuffix: '',
     scrclass: ""
   },
   async onInit() {
-    // 下载期间保持屏幕常亮
-    brightness.setKeepScreenOn({
-      keepScreenOn: true,
-      fail: function(data, code) {
-        global.logger.log("[videocontent] setKeepScreenOn failed: " + code)
-      }
-    })
     this.cacheKeySuffix = this.pageNum && this.pageNum > 1 ? `_p${this.pageNum}` : ''
     await this.CheckCacheStatus()
-  },
-  onDestroy() {
-    // 退出时关闭屏幕常亮
-    brightness.setKeepScreenOn({
-      keepScreenOn: false,
-      fail: function(data, code) {
-        global.logger.log("[videocontent] setKeepScreenOn(false) failed: " + code)
-      }
-    })
   },
   async CheckCacheStatus() {
     try {
@@ -156,61 +147,130 @@ export default {
     this.downloadingSprite = true
     this.showDownloadDialog = true
     this.downloadProgressText = '正在获取雪碧图数据...'
-    this.downloadProgressPercent = 5
+    this.downloadProgressPercent = 3
 
     const maxRetries = 3
-    let frameData = null
+    // 低画质：单帧120px，用于查看雪碧图（解码内存≈3.2MB，viewer 4MB阈值内）
+    let lowFrameData = null
+    // 高画质：单帧100px，用于逐帧裁切播放（1000×540≈2.16MB，安全低于手表4MB解码上限，避免重启）
+    let highFrameData = null
+
+    // 同一 aid 的低/高画质只是CDN缩放不同，元数据一致，分别请求以拿到各自URL
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
-        this.downloadProgressText = '正在获取雪碧图数据...'
-        frameData = await global.biliclient.getVideoFramesByAID(this.aid, 60)
-        if (frameData && frameData.image && frameData.image.length > 0) break
-        frameData = null
+        this.downloadProgressText = '正在获取低画质雪碧图...'
+        lowFrameData = await global.biliclient.getVideoFramesByAID(this.aid, 0, 120)
+        if (lowFrameData && lowFrameData.image && lowFrameData.image.length > 0) break
+        lowFrameData = null
       } catch (e) {
-        global.logger.error("[videocontent] getVideoFramesByAID attempt " + (attempt + 1) + " Error: " + e.toString())
+        global.logger.error("[videocontent] getVideoFramesByAID(low) attempt " + (attempt + 1) + " Error: " + e.toString())
       }
       if (attempt < maxRetries - 1) {
         this.downloadProgressText = '获取失败，重试中(' + (attempt + 2) + '/' + maxRetries + ')...'
       }
     }
 
-    if (!frameData || !frameData.image || frameData.image.length === 0) {
+    if (!lowFrameData || !lowFrameData.image || lowFrameData.image.length === 0) {
       this.showDownloadDialog = false
       prompt.showToast({ message: '该视频没有可用的雪碧图' })
       this.downloadingSprite = false
       return
     }
 
+    // 高画质失败不阻断：回退使用低画质URL播放（仅清晰度略低）
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        this.downloadProgressText = '正在获取高画质雪碧图...'
+        highFrameData = await global.biliclient.getVideoFramesByAID(this.aid, 0, 100)
+        if (highFrameData && highFrameData.image && highFrameData.image.length > 0) break
+        highFrameData = null
+      } catch (e) {
+        global.logger.error("[videocontent] getVideoFramesByAID(high) attempt " + (attempt + 1) + " Error: " + e.toString())
+      }
+    }
+
+    // 统计：总帧数（跨所有雪碧图）、雪碧图张数、单张格子数
+    const fCols = lowFrameData.img_x_len || lowFrameData.img_cols || 10
+    const fRows = lowFrameData.img_y_len || lowFrameData.img_rows || 10
+    const perImage = fCols * fRows
+    const totalThumbs = lowFrameData.total_frames
+      || (lowFrameData.index && Array.isArray(lowFrameData.index) ? lowFrameData.index.length : perImage)
+    const sheetCount = lowFrameData.image_count || lowFrameData.image.length
+    this.downloadCountText = '雪碧图' + sheetCount + '张，共' + totalThumbs + '帧'
+
     try {
-      const images = frameData.image
-      const localImages = []
-      for (let i = 0; i < images.length; i++) {
-        let url = images[i]
+      // 下载低画质（查看用）
+      const lowImages = lowFrameData.image
+      const lowLocalImages = []
+      for (let i = 0; i < lowImages.length; i++) {
+        let url = lowImages[i]
         if (url.startsWith('//')) url = 'https:' + url
 
-        this.downloadProgressText = '下载雪碧图 ' + (i + 1) + '/' + images.length
-        this.downloadProgressPercent = Math.floor(10 + (i / images.length) * 80)
+        this.downloadProgressText = '下载低画质雪碧图 ' + (i + 1) + '/' + lowImages.length
+        this.downloadProgressPercent = Math.floor(5 + (i / lowImages.length) * 45)
 
         let localUri = null
         for (let retry = 0; retry < maxRetries; retry++) {
-          localUri = await this.downloadImage(url, this.bvid + '_sprite_' + i + '.jpg')
+          localUri = await this.downloadImage(url, this.bvid + '_sprite_low_' + i + '.jpg')
           if (localUri) break
           if (retry < maxRetries - 1) {
-            this.downloadProgressText = '图片' + (i + 1) + '下载失败，重试中...'
+            this.downloadProgressText = '低画质图片' + (i + 1) + '下载失败，重试中...'
           }
         }
         if (localUri) {
-          localImages.push(localUri)
+          lowLocalImages.push(localUri)
         } else {
-          localImages.push(url)
+          lowLocalImages.push(url)
         }
       }
+      lowFrameData.image = lowLocalImages
 
-      frameData.image = localImages
+      // 下载高画质（逐帧播放用）；若高画质获取失败则复用低画质
+      const useHigh = !!(highFrameData && highFrameData.image && highFrameData.image.length > 0)
+      const highImages = useHigh ? highFrameData.image : lowImages
+      const highLocalImages = []
+      for (let i = 0; i < highImages.length; i++) {
+        let url = highImages[i]
+        if (url.startsWith('//')) url = 'https:' + url
 
+        this.downloadProgressText = (useHigh ? '下载高画质雪碧图 ' : '复用雪碧图 ') + (i + 1) + '/' + highImages.length
+        this.downloadProgressPercent = Math.floor(50 + (i / highImages.length) * 40)
+
+        // 高画质失败/复用场景下，直接用已下载的低画质本地文件
+        if (!useHigh) {
+          highLocalImages.push(lowLocalImages[i] || url)
+          continue
+        }
+
+        let localUri = null
+        for (let retry = 0; retry < maxRetries; retry++) {
+          localUri = await this.downloadImage(url, this.bvid + '_sprite_high_' + i + '.jpg')
+          if (localUri) break
+          if (retry < maxRetries - 1) {
+            this.downloadProgressText = '高画质图片' + (i + 1) + '下载失败，重试中...'
+          }
+        }
+        if (localUri) {
+          highLocalImages.push(localUri)
+        } else {
+          // 高画质单张下载失败，回退对应低画质本地文件
+          highLocalImages.push(lowLocalImages[i] || url)
+        }
+      }
+      if (useHigh) {
+        highFrameData.image = highLocalImages
+      } else {
+        // 复用低画质帧数据结构（含本地URL）
+        highFrameData = JSON.parse(JSON.stringify(lowFrameData))
+        highFrameData.image = highLocalImages
+      }
+
+      // 缓存结构：frameData=低画质(查看)，hdFrameData=高画质(逐帧播放)
+      // frameCount = 跨所有雪碧图的总帧数，供播放页滑动/逐帧使用，长视频可超过100帧
       const spriteJson = JSON.stringify({
-        frameData,
-        frameCount: 60
+        frameData: lowFrameData,
+        hdFrameData: highFrameData,
+        frameCount: totalThumbs
       })
 
       this.downloadProgressText = '正在保存缓存...'
@@ -240,6 +300,23 @@ export default {
       params: {
         title: this.title,
         cachedSpriteId: this.cachedSpriteId
+      }
+    })
+  },
+  // 雪碧图逐帧播放：跳转播放器（手环内存有限，不附带音频，降低崩溃风险）
+  PlaySprite() {
+    if (!this.cachedSpriteId) {
+      prompt.showToast({ message: '无可用雪碧图缓存' })
+      return
+    }
+    router.push({
+      uri: "pages/video/spriteplayer",
+      params: {
+        cachedSpriteId: this.cachedSpriteId,
+        title: this.title,
+        cid: this.cid,
+        aid: this.aid,
+        bvid: this.bvid
       }
     })
   },
@@ -290,15 +367,19 @@ export default {
     this.showDownloadDialog = true
     this.downloadProgressText = '正在获取音频地址...'
     this.downloadProgressPercent = 5
+    // 音频下载不显示雪碧图统计文案，清空上一次雪碧图下载残留的计数
+    this.downloadCountText = ''
 
     try {
       // 优先用传入的cid（对应选中的分P），没有才fallback到按bvid找默认P1 cid
-      let audioUrl
+      let audioInfo
       if (this.cid) {
-        audioUrl = await global.biliclient.getVideoBestAudioUrlByCid(this.bvid, this.cid)
+        audioInfo = await global.biliclient.getVideoBestAudioUrlByCid(this.bvid, this.cid)
       } else {
-        audioUrl = await global.biliclient.getVideoBestAudioUrlByBVID(this.bvid)
+        const url = await global.biliclient.getVideoBestAudioUrlByBVID(this.bvid)
+        audioInfo = { url: url, estimatedSize: 0 }
       }
+      const audioUrl = audioInfo && audioInfo.url
       if (!audioUrl) {
         this.showDownloadDialog = false
         prompt.showToast({ message: '获取音频地址失败' })
@@ -306,59 +387,40 @@ export default {
         return
       }
 
-      this.downloadProgressText = '正在下载音频...'
-      this.downloadProgressPercent = 15
+      // 总大小：改为获取音频文件的真实字节数（Range 请求读 Content-Range），
+      // 而不是用码率×时长估算。获取失败则回退为 0（进度条走不确定模式）。
+      this.downloadProgressText = '正在获取音频大小...'
+      let realSize = 0
+      try {
+        realSize = await global.biliclient.getRemoteAudioSize(audioUrl, 'https://www.bilibili.com')
+      } catch (e) {
+        global.logger.error("[videocontent] getRemoteAudioSize error: " + e.toString())
+      }
+      this.audioTotalSize = realSize || (audioInfo && audioInfo.estimatedSize) || 0
+      this.audioDownloadedSize = 0
+      this.UpdateAudioSizeText()
 
       const filename = `${this.bvid}_audio.m4s`
       const that = this
 
-      request.download({
-        url: audioUrl,
-        header: JSON.stringify({
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Referer': 'https://www.bilibili.com',
-          'Range': 'bytes=0-'
-        }),
-        filename,
-        success: function(res) {
-          request.onDownloadComplete({
-            token: res.token,
-            success: async function(result) {
-              try {
-                that.downloadProgressText = '正在保存音频...'
-                that.downloadProgressPercent = 90
-                await global.savedcontent.SavedContentManager.storeVideoAudio(
-                  that.title,
-                  result.uri,
-                  that.coverUrl,
-                  that.author,
-                  that.bvid + that.cacheKeySuffix
-                )
-                const contents = await global.savedcontent.SavedContentManager.listAllContent()
-                const audioItem = contents.find((ct) => ct.bvid === that.bvid + that.cacheKeySuffix && ct.type === 'videoAudio')
-                if (audioItem) that.cachedAudioId = audioItem.id
-                that.audioCached = true
-                that.downloadProgressPercent = 100
-                that.showDownloadDialog = false
-                prompt.showToast({ message: '音频缓存成功' })
-              } catch (e) {
-                global.logger.error("[videocontent] storeAudio Error: " + e.toString())
-                that.showDownloadDialog = false
-                prompt.showToast({ message: '保存音频缓存失败' })
-              }
-              that.downloadingAudio = false
-            },
-            fail: function(error) {
+      // 先按带 B 站防盗链头下载；部分 CDN 节点会因 Range/头部拒绝，再降级为无头部直下
+      // 下载过程中通过定时器轮询本地文件大小，展示“已下载/总大小”
+      this.StartAudioSizePolling()
+      this.DownloadAudioFile(audioUrl, filename, true, function (ok, uri, errorMsg) {
+        if (ok) {
+          that.HandleAudioDownloaded(uri)
+        } else {
+          global.logger.log("[videocontent] audio download with headers failed: " + (errorMsg || "") + ", retry without headers")
+          that.DownloadAudioFile(audioUrl, filename, false, function (ok2, uri2, errorMsg2) {
+            if (ok2) {
+              that.HandleAudioDownloaded(uri2)
+            } else {
+              that.StopAudioSizePolling()
               that.showDownloadDialog = false
               prompt.showToast({ message: '音频下载失败' })
               that.downloadingAudio = false
             }
           })
-        },
-        fail: function(error) {
-          that.showDownloadDialog = false
-          prompt.showToast({ message: '音频下载任务创建失败' })
-          that.downloadingAudio = false
         }
       })
     } catch (e) {
@@ -367,6 +429,147 @@ export default {
       prompt.showToast({ message: '下载音频失败' })
       this.downloadingAudio = false
     }
+  },
+  // 字节数格式化为人类可读（B/KB/MB）
+  FormatBytes(bytes) {
+    if (!bytes || bytes < 0) bytes = 0
+    if (bytes < 1024) return bytes + 'B'
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + 'KB'
+    return (bytes / (1024 * 1024)).toFixed(2) + 'MB'
+  },
+  // 更新下载文案：正在下载 已下载/总大小
+  UpdateAudioSizeText() {
+    const dl = this.FormatBytes(this.audioDownloadedSize)
+    if (this.audioTotalSize > 0) {
+      const total = this.FormatBytes(this.audioTotalSize)
+      this.downloadProgressText = '正在下载 ' + dl + ' / ' + total
+      const pct = Math.min(95, Math.floor((this.audioDownloadedSize / this.audioTotalSize) * 90) + 5)
+      this.downloadProgressPercent = pct
+    } else {
+      this.downloadProgressText = '正在下载 ' + dl
+      // 无总大小时用一个缓慢推进的进度（最多到80%），避免进度条停滞
+      const fake = Math.min(80, 15 + Math.floor(this.audioDownloadedSize / (1024 * 1024) * 2))
+      this.downloadProgressPercent = fake
+    }
+  },
+  // 轮询本地临时文件大小（request.download 无 onprogress 回调时的替代方案）
+  StartAudioSizePolling() {
+    this.StopAudioSizePolling()
+    const that = this
+    const filename = this.bvid + '_audio.m4s'
+    // 不同引擎下载临时文件落点不同，逐个尝试
+    const candidates = [
+      'internal://cache/' + filename,
+      'internal://files/' + filename,
+      filename
+    ]
+    this.audioSizeTimer = setInterval(async () => {
+      for (let i = 0; i < candidates.length; i++) {
+        try {
+          const info = await asyncFile.get({ uri: candidates[i] })
+          if (info && info.length) {
+            that.audioDownloadedSize = info.length
+            that.UpdateAudioSizeText()
+            return
+          }
+        } catch (e) {
+          // 该候选路径不存在，继续尝试下一个
+        }
+      }
+    }, 800)
+  },
+  StopAudioSizePolling() {
+    if (this.audioSizeTimer) {
+      clearInterval(this.audioSizeTimer)
+      this.audioSizeTimer = null
+    }
+  },
+  // 统一的音频文件下载封装，useHeader 控制是否携带 B 站防盗链头
+  DownloadAudioFile(audioUrl, filename, useHeader, callback) {
+    const that = this
+    const options = {
+      url: audioUrl,
+      filename,
+      success: function (res) {
+        request.onDownloadComplete({
+          token: res.token,
+          success: function (result) {
+            // 校验下载到的确实是音频流（m4s/mp4 的 ftyp box），CDN 偶尔会返回错误页
+            that.ValidateAudioFile(result.uri).then(function (valid) {
+              if (valid) {
+                callback(true, result.uri)
+              } else {
+                callback(false, null, "invalid audio file")
+              }
+            }).catch(function () {
+              callback(false, null, "validate error")
+            })
+          },
+          fail: function (error) {
+            callback(false, null, JSON.stringify(error))
+          }
+        })
+      },
+      fail: function (error) {
+        callback(false, null, JSON.stringify(error))
+      }
+    }
+    if (useHeader) {
+      options.header = JSON.stringify({
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Referer': 'https://www.bilibili.com'
+      })
+    }
+    request.download(options)
+  },
+  // 校验本地文件是否为有效的音频（m4s/mp4）：存在且第5-8字节为 ftyp
+  async ValidateAudioFile(uri) {
+    try {
+      const fileInfo = await asyncFile.get({ uri })
+      if (!fileInfo || !fileInfo.length || fileInfo.length < 1024) {
+        return false
+      }
+      const header = await asyncFile.readArrayBuffer({ uri, position: 0, length: 12 })
+      if (!header || header.length < 8) {
+        return false
+      }
+      const boxType = String.fromCharCode(header[4], header[5], header[6], header[7])
+      return boxType === 'ftyp'
+    } catch (e) {
+      return false
+    }
+  },
+  async HandleAudioDownloaded(uri) {
+    const that = this
+    that.StopAudioSizePolling()
+    try {
+      // 用最终文件大小刷新一次显示
+      try {
+        const info = await asyncFile.get({ uri })
+        if (info && info.length) that.audioDownloadedSize = info.length
+      } catch (e) {}
+      that.downloadProgressText = '正在保存音频...'
+      that.downloadProgressPercent = 90
+      await global.savedcontent.SavedContentManager.storeVideoAudio(
+        that.title,
+        uri,
+        that.coverUrl,
+        that.author,
+        that.bvid + that.cacheKeySuffix
+      )
+      const contents = await global.savedcontent.SavedContentManager.listAllContent()
+      const audioItem = contents.find((ct) => ct.bvid === that.bvid + that.cacheKeySuffix && ct.type === 'videoAudio')
+      if (audioItem) that.cachedAudioId = audioItem.id
+      that.audioCached = true
+      that.downloadProgressPercent = 100
+      that.showDownloadDialog = false
+      prompt.showToast({ message: '音频缓存成功' })
+    } catch (e) {
+      global.logger.error("[videocontent] storeAudio Error: " + e.toString())
+      that.showDownloadDialog = false
+      prompt.showToast({ message: '保存音频缓存失败' })
+    }
+    that.downloadingAudio = false
   },
   async OpenAudioPlayer() {
     const contents = await global.savedcontent.SavedContentManager.listAllContent()
@@ -496,6 +699,10 @@ export default {
   background-color: #FB7299;
 }
 
+.action-play {
+  background-color: #FB7299;
+}
+
 .action-delete {
   background-color: #333333;
 }
@@ -564,6 +771,13 @@ export default {
   text-align: center;
   lines: 2;
   text-overflow: ellipsis;
+}
+
+.dl-count {
+  font-size: 18px;
+  color: #9e9e9e;
+  margin-top: 8px;
+  text-align: center;
 }
 
 .dl-bar-bg {

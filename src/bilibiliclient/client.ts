@@ -12,6 +12,7 @@ import { BilibiliClientMessageMethods } from './message/message';
 import { BilibiliClientSearchMethods } from './search/search';
 import { BilibiliClientAPIRequestMethods } from './api/request';
 import { BilibiliClientDynamicMethods } from './dynamic/dynamic';
+import { BilibiliClientDanmakuMethods } from './danmaku/danmaku';
 
 class BilibiliClient {
     // 版本号
@@ -64,7 +65,8 @@ Object.assign(BilibiliClient.prototype,
     BilibiliClientCommentMethods,
     BilibiliClientMessageMethods,
     BilibiliClientSearchMethods,
-    BilibiliClientDynamicMethods
+    BilibiliClientDynamicMethods,
+    BilibiliClientDanmakuMethods
 );
 
 export { BilibiliClient };

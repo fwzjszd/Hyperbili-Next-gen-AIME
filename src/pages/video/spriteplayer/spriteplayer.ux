@@ -1,0 +1,799 @@
+<template>
+  <div class="page">
+    <image style="position: absolute; left: 0px" src="{{getBgImg}}"></image>
+
+    <!-- 顶部：标题 + 返回 -->
+    <div class="top-bar">
+      <div class="back-btn" @click="ExitPage">
+        <text class="back-text">返回</text>
+      </div>
+      <text class="title-text">{{title}}</text>
+      <div class="placeholder-btn"></div>
+    </div>
+
+    <!-- 雪碧图播放区（弹幕叠加在视频之上） -->
+    <div class="player-viewport" style="width: {{frameW}}px; height: {{frameH}}px;">
+      <div class="player-area" style="width: {{frameW}}px; height: {{frameH}}px;">
+        <!-- 逐帧播放：直接显示 CDN 裁切好的单帧小图（约160×90），
+             手表每次只解码一张单帧，绝不整张解码雪碧图，避免卡死/重启 -->
+        <image class="frame-img"
+               if="{{!transferring && readyToPlay && currentFrameUrl}}"
+               src="{{currentFrameUrl}}"></image>
+        <div class="placeholder-box" if="{{transferring || !readyToPlay || !currentFrameUrl}}">
+          <image class="placeholder-img" src="/common/vidtool_intro.png"></image>
+        </div>
+
+        <!-- 弹幕层：与视频同尺寸叠加 -->
+        <div class="danmaku-layer" if="{{danmakuEnabled && readyToPlay}}">
+          <text class="danmaku-item" for="(index,item) in danmakuList" tid="danmaku"
+                style="position: absolute; left: {{item.x}}px; top: {{item.y}}px; color: {{item.color}};">{{item.text}}</text>
+        </div>
+
+        <!-- 传输中进度层 -->
+        <div class="loading-overlay" if="{{transferring}}">
+          <text class="loading-title">传输中</text>
+          <text class="loading-text">剩余{{remainingFrames}}帧 / 共{{totalTransferFrames}}帧</text>
+          <div class="transfer-bar-bg">
+            <div class="transfer-bar" style="width: {{transferPercent}}%"></div>
+          </div>
+          <text class="loading-sub">手机→手表缓存中，请勿退出</text>
+        </div>
+        <!-- 加载/错误提示 -->
+        <div class="loading-overlay" if="{{loading}}">
+          <text class="loading-text">{{loadStatus}}</text>
+        </div>
+        <div class="loading-overlay error-overlay" if="{{!loading && loadError}}">
+          <text class="loading-text">{{loadStatus}}</text>
+        </div>
+      </div>
+    </div>
+
+    <!-- 就绪提示：放在图片下方，纯文字，不遮挡/影响视频的暂停与播放 -->
+    <text class="ready-hint" if="{{!transferring && readyToPlay && !isPlaying && !loadError}}">
+      手表已保存，点击下方播放按钮开始
+    </text>
+
+    <!-- 进度：可滑动拖拽，下方显示第X张/共Y张 -->
+    <div class="progress-wrap" if="{{!loadError && readyToPlay}}" style="width: {{frameW}}px;">
+      <slider class="frame-slider" min="0" max="{{sliderMax}}" value="{{currentFrame}}" @change="OnSliderChange"></slider>
+      <text class="frame-text">第{{currentFrame + 1}}张 / 共{{actualTotalFrames}}张 · {{speedLabel}}</text>
+    </div>
+
+    <!-- 下方控制按钮：慢放、暂停/播放、快进、弹幕开关 -->
+    <div class="controls-block" if="{{!loadError && readyToPlay}}">
+      <div class="ctrl-btn ctrl-btn-slow" @click="SlowDown">
+        <text class="ctrl-icon">慢放</text>
+      </div>
+      <div class="ctrl-btn ctrl-btn-play" @click="TogglePlay">
+        <text class="ctrl-icon ctrl-icon-play">{{isPlaying ? '暂停' : '播放'}}</text>
+      </div>
+      <div class="ctrl-btn ctrl-btn-fast" @click="SpeedUp">
+        <text class="ctrl-icon">快进</text>
+      </div>
+      <div class="ctrl-btn ctrl-btn-danmaku {{danmakuEnabled ? 'ctrl-btn-danmaku-on' : ''}}" @click="ToggleDanmaku">
+        <text class="ctrl-icon">{{danmakuEnabled ? '弹幕开' : '弹幕关'}}</text>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import router from "@system.router"
+import prompt from "@system.prompt"
+
+export default {
+  public: {
+    cachedSpriteId: '',
+    title: '',
+    cid: '',
+    aid: '',
+    bvid: ''
+  },
+  private: {
+    scrclass: "",
+    // 逐帧数据：每一帧一个 CDN 裁切好的单帧小图地址，播放时逐张切换 src
+    frameList: [],
+    currentFrameUrl: '',
+    imgX: 160,
+    imgY: 90,
+    cols: 10,
+    rows: 10,
+    cropRows: 10,
+    totalFrames: 60,
+    framesPerImage: 100,
+    actualTotalFrames: 60,
+    sliderMax: 59,
+    // 显示布局（单帧等比放大显示）
+    frameW: 320,
+    frameH: 180,
+    // 播放状态
+    isPlaying: false,
+    currentFrame: 0,
+    playTimer: null,
+    baseFps: 15,
+    // 播放倍速：以 0.25x 为标准流速，向左慢放、向右快进
+    playSpeed: 0.25,
+    speedIndex: 1,
+    speedOptions: [0.125, 0.25, 0.5, 1, 1.5, 2],
+    speedLabels: ['0.125x', '标准', '0.5x', '1x', '1.5x', '2x'],
+    speedLabel: '标准',
+    frameFloat: 0,
+    // 弹幕
+    danmakuEnabled: true,
+    danmakuMaxCount: 5,
+    danmakuAll: [],
+    danmakuList: [],
+    danmakuTimer: null,
+    danmakuSpawnTimer: null,
+    danmakuIdSeq: 0,
+    danmakuSpawnIdx: 0,
+    danmakuRow: 0,
+    danmakuTracks: 3,
+    // 状态
+    loading: true,
+    loadError: false,
+    loadStatus: '加载中...',
+    // 渐进式"传输"（逐张雪碧图预解码到手表缓存）
+    // 手机侧已下载的雪碧图在进入播放页时不立即整批解码（过猛会导致手表重启），
+    // 而是逐张加载/解码到本地，每张之间留出节流间隔，完成后才允许点击播放。
+    transferring: false,
+    readyToPlay: false,
+    totalTransferFrames: 0,
+    transferredFrames: 0,
+    remainingFrames: 0,
+    transferPercent: 0,
+    transferIndex: 0,
+    transferTimer: null,
+    preloadImg: null
+  },
+  computed: {
+    getBgImg() {
+      return global.bgimg ? global.bgimg.GetCurrentBgImg() : ""
+    }
+  },
+  onInit() {
+    global.logger.log("[spriteplayer] onInit")
+    // 读取弹幕设置
+    this.danmakuEnabled = global.settings.SETTINGS.enableDanmaku !== false
+    this.danmakuMaxCount = global.settings.SETTINGS.danmakuMaxCount || 5
+    // 播放前提示：手环本体无独立网络，雪碧图帧数据需经手机蓝牙通道获取/校验，
+    // 且播放过程中可能需要手机辅助解码，因此请保持手机在身旁并已连接
+    prompt.showDialog({
+      title: "播放提示",
+      message: "手环本体不具备独立联网能力，雪碧图逐帧数据需要通过已连接的手机蓝牙通道获取与校验。请确认手机就在身旁且与手环保持连接，否则可能无法正常播放。",
+      buttons: [
+        { text: "我知道了", color: "#FB7299" }
+      ],
+      success: () => {
+        this.InitSpriteData()
+      },
+      fail: () => {
+        this.InitSpriteData()
+      }
+    })
+  },
+  onHide() {
+    this.PausePlay()
+    this.StopDanmaku()
+    this.StopTransfer()
+  },
+  onDestroy() {
+    this.PausePlay()
+    this.StopDanmaku()
+    this.StopTransfer()
+  },
+  // 中断渐进传输（退出页面时）
+  StopTransfer() {
+    this.transferring = false
+    if (this.transferTimer) {
+      clearTimeout(this.transferTimer)
+      this.transferTimer = null
+    }
+  },
+  // 读取缓存并初始化播放
+  async InitSpriteData() {
+    try {
+      const jsonStr = await global.savedcontent.SavedContentManager.getContent(this.cachedSpriteId)
+      if (!jsonStr) {
+        this.loadError = true
+        this.loadStatus = '缓存数据不存在'
+        this.loading = false
+        return
+      }
+      const parsed = JSON.parse(jsonStr)
+      // 逐帧播放使用高画质 hdFrameData；旧缓存回退到低画质 frameData
+      const frameData = parsed.hdFrameData || parsed.frameData
+      if (!frameData || !frameData.image || frameData.image.length === 0) {
+        this.loadError = true
+        this.loadStatus = '无可用雪碧图'
+        this.loading = false
+        return
+      }
+
+      this.imgX = frameData.img_x || frameData.img_x_size || 160
+      this.imgY = frameData.img_y || frameData.img_y_size || 90
+      this.cols = frameData.img_x_len || frameData.img_cols || 10
+      this.rows = frameData.img_y_len || frameData.img_rows || 10
+      this.cropRows = frameData.crop_rows || this.rows
+
+      // 逐帧 CDN 裁切地址列表：每帧一个小图 URL（由 video.ts 在下载时生成）。
+      // 旧缓存没有该字段时，用当前帧数据即时构建（回退兼容）。
+      let frameList = frameData.frameList
+      if (!frameList || frameList.length === 0) {
+        if (global.biliclient.buildVideoFrameCropList) {
+          frameList = global.biliclient.buildVideoFrameCropList(frameData)
+        } else {
+          frameList = []
+        }
+      }
+      // 兜底补全协议头：B站返回的是 //i0.hdslb.com/... 协议相对地址，
+      // 手表 <image> 必须带 http(s): 才能加载，否则逐帧全黑。
+      this.frameList = (frameList || []).map((u) => {
+        if (u && u.indexOf('//') === 0) return 'https:' + u
+        return u
+      })
+
+      // 帧数：以 frameList 长度为准（跨所有雪碧图的总帧数）
+      this.framesPerImage = this.cols * this.rows
+      this.totalFrames = frameData.total_frames || parsed.frameCount || this.frameList.length || (this.cols * this.cropRows)
+      this.actualTotalFrames = this.frameList.length > 0
+        ? Math.min(this.totalFrames, this.frameList.length)
+        : this.totalFrames
+      this.sliderMax = Math.max(0, this.actualTotalFrames - 1)
+
+      if (this.actualTotalFrames <= 0) {
+        this.loadError = true
+        this.loadStatus = '无可用帧'
+        this.loading = false
+        return
+      }
+
+      // 单帧显示尺寸：单帧小图等比放大铺满宽度（约350px）
+      const screenW = (global.DEVICE_INFO && global.DEVICE_INFO.screenWidth) || 390
+      this.frameW = Math.min(350, screenW - 30)
+      this.frameH = Math.round((this.frameW / this.imgX) * this.imgY)
+
+      global.logger.log("[spriteplayer] per-frame mode: frames=" + this.actualTotalFrames
+        + ", cell=" + this.imgX + "x" + this.imgY + ", display=" + this.frameW + "x" + this.frameH)
+
+      this.currentFrame = 0
+      this.currentFrameUrl = ''
+      this.loading = false
+
+      // 逐帧小图解码极轻（单帧约160×90≈57KB RGBA），按帧渐进预加载并显示进度，
+      // 每张之间节流，避免连续网络/解码造成卡顿。
+      this.BeginTransfer()
+    } catch (e) {
+      global.logger.error("[spriteplayer] InitSpriteData error: " + e.toString())
+      this.loadError = true
+      this.loadStatus = '加载失败'
+      this.loading = false
+    }
+  },
+  // 渐进式传输：逐帧预加载单帧小图，每帧之间节流
+  BeginTransfer() {
+    const count = this.actualTotalFrames
+    if (count <= 0) {
+      this.loadError = true
+      this.loadStatus = '无可用帧'
+      return
+    }
+    this.transferring = true
+    this.readyToPlay = false
+    this.transferIndex = 0
+    this.transferredFrames = 0
+    this.totalTransferFrames = count
+    this.remainingFrames = count
+    this.transferPercent = 0
+    global.logger.log("[spriteplayer] begin frame transfer, frames=" + count)
+    this.TransferNext()
+  },
+  // 预加载单帧小图：触发解码并进入图像缓存
+  PreloadImage(url) {
+    return new Promise((resolve) => {
+      try {
+        const img = new Image()
+        img.onload = () => { resolve(true) }
+        img.onerror = () => { resolve(false) }
+        img.src = url
+      } catch (e) {
+        resolve(true)
+      }
+    })
+  },
+  TransferNext() {
+    if (!this.transferring) return
+    if (this.transferIndex >= this.actualTotalFrames) {
+      this.FinishTransfer()
+      return
+    }
+    const url = this.frameList[this.transferIndex]
+    this.PreloadImage(url).then(() => {
+      if (!this.transferring) return
+      this.transferIndex++
+      this.transferredFrames = this.transferIndex
+      this.remainingFrames = Math.max(0, this.totalTransferFrames - this.transferIndex)
+      this.transferPercent = Math.floor((this.transferredFrames / this.totalTransferFrames) * 100)
+      // 节流：每帧之间留出 40ms，让解码/GC 平稳进行
+      this.transferTimer = setTimeout(() => {
+        this.TransferNext()
+      }, 40)
+    })
+  },
+  FinishTransfer() {
+    this.transferring = false
+    this.readyToPlay = true
+    this.transferPercent = 100
+    this.remainingFrames = 0
+    if (this.transferTimer) {
+      clearTimeout(this.transferTimer)
+      this.transferTimer = null
+    }
+    // 就绪后显示第一帧（仍不自动播放，等待用户点击）
+    this.currentFrameUrl = this.frameList[0] || ''
+    global.logger.log("[spriteplayer] transfer complete, ready to play")
+    this.LoadDanmaku()
+  },
+  // 从B站XML接口获取真实弹幕
+  async LoadDanmaku() {
+    if (!this.cid) {
+      global.logger.log("[spriteplayer] no cid, skip danmaku")
+      return
+    }
+    try {
+      const list = await global.biliclient.getDanmakuByCid(this.cid)
+      if (list && list.length > 0) {
+        // 将十进制颜色转换为 #RRGGBB，供模板直接使用
+        this.danmakuAll = list.map((d) => {
+          return {
+            time: d.time,
+            mode: d.mode,
+            color: global.biliclient.danmakuColorToHex(d.color),
+            text: d.text
+          }
+        })
+        this.danmakuSpawnIdx = 0
+        global.logger.log("[spriteplayer] danmaku loaded: " + this.danmakuAll.length)
+      } else {
+        this.danmakuAll = []
+      }
+    } catch (e) {
+      global.logger.error("[spriteplayer] LoadDanmaku error: " + e.toString())
+      this.danmakuAll = []
+    }
+  },
+  // 更新当前帧：直接切换到该帧对应的 CDN 裁切单张小图地址。
+  // 每帧都是独立的小图（约160×90），手表一次只解码一张单帧，绝不解码整张雪碧图。
+  UpdateFrameDisplay() {
+    if (!this.frameList || this.frameList.length === 0) return
+    if (this.currentFrame < 0 || this.currentFrame >= this.frameList.length) return
+    this.currentFrameUrl = this.frameList[this.currentFrame]
+  },
+  StartPlay() {
+    if (this.actualTotalFrames <= 0 || this.playTimer) return
+    this.isPlaying = true
+    // 以固定基础帧率驱动，用帧累加支持慢放(小于1)与快进(大于1)，避免反复重建定时器
+    const tickMs = Math.round(1000 / this.baseFps)
+    this.frameFloat = this.currentFrame
+    this.playTimer = setInterval(() => {
+      this.frameFloat += this.playSpeed
+      let next = Math.floor(this.frameFloat)
+      if (next >= this.actualTotalFrames) {
+        // 循环播放
+        this.frameFloat = this.frameFloat % this.actualTotalFrames
+        next = Math.floor(this.frameFloat)
+      }
+      if (next !== this.currentFrame) {
+        this.currentFrame = next
+        this.UpdateFrameDisplay()
+      }
+    }, tickMs)
+  },
+  PausePlay() {
+    if (this.playTimer) {
+      clearInterval(this.playTimer)
+      this.playTimer = null
+    }
+    this.isPlaying = false
+  },
+  TogglePlay() {
+    // 传输未完成时不允许播放
+    if (!this.readyToPlay) {
+      prompt.showToast({ message: '传输中，请稍候' })
+      return
+    }
+    if (this.isPlaying) {
+      this.PausePlay()
+    } else {
+      // 首次点击播放时启动弹幕（传输阶段不启动，降低负载）
+      if (this.danmakuEnabled && this.danmakuAll.length >= 0 && !this.danmakuTimer) {
+        this.StartDanmaku()
+      }
+      this.StartPlay()
+    }
+  },
+  // 重启播放定时器以应用新倍速
+  ApplySpeed() {
+    this.speedLabel = this.speedLabels[this.speedIndex]
+    this.playSpeed = this.speedOptions[this.speedIndex]
+    if (this.isPlaying) {
+      this.PausePlay()
+      this.StartPlay()
+    }
+  },
+  // 慢放：倍速档位向左（更慢）
+  SlowDown() {
+    if (this.speedIndex > 0) {
+      this.speedIndex--
+      this.ApplySpeed()
+    } else {
+      prompt.showToast({ message: '已是最慢' })
+    }
+  },
+  // 快进：倍速档位向右（更快）
+  SpeedUp() {
+    if (this.speedIndex < this.speedOptions.length - 1) {
+      this.speedIndex++
+      this.ApplySpeed()
+    } else {
+      prompt.showToast({ message: '已是最快' })
+    }
+  },
+  // 弹幕：按当前播放时间派发真实弹幕，叠加在视频之上滚动
+  // 当前雪碧图对应的“视频时间”（秒）= 帧序号 / 基础帧率
+  GetCurrentVideoTime() {
+    return this.currentFrame / this.baseFps
+  },
+  StartDanmaku() {
+    if (!this.danmakuEnabled) return
+    this.StopDanmaku()
+    // 从当前播放时间起，定位弹幕派发游标
+    const nowTime = this.GetCurrentVideoTime()
+    this.danmakuSpawnIdx = 0
+    for (let i = 0; i < this.danmakuAll.length; i++) {
+      if (this.danmakuAll[i].time <= nowTime) {
+        this.danmakuSpawnIdx = i + 1
+      } else {
+        break
+      }
+    }
+    this.danmakuRow = 0
+    // 弹幕移动定时器
+    this.danmakuTimer = setInterval(() => {
+      const list = this.danmakuList
+      for (let i = list.length - 1; i >= 0; i--) {
+        list[i].x -= 4
+        if (list[i].x < -300) list.splice(i, 1)
+      }
+      this.danmakuList = list.slice()
+    }, 80)
+    // 弹幕派发定时器：依据播放时间生成对应时刻的弹幕
+    this.danmakuSpawnTimer = setInterval(() => {
+      if (!this.danmakuAll || this.danmakuAll.length === 0) return
+      const maxCount = this.danmakuMaxCount
+      // 手环性能：在屏弹幕数量受设置项控制
+      if (this.danmakuList.length >= maxCount) return
+      const curTime = this.GetCurrentVideoTime()
+      const all = this.danmakuAll
+      // 轨道数随同屏上限增长，避免高数量时全部挤在同一行；按帧高估算可容纳轨道
+      const tracks = Math.max(this.danmakuTracks, Math.min(maxCount, Math.floor(this.frameH / 30)))
+      // 派发所有“已到时间但尚未派发”的弹幕（受在屏数量限制）
+      while (this.danmakuSpawnIdx < all.length
+        && all[this.danmakuSpawnIdx].time <= curTime
+        && this.danmakuList.length < maxCount) {
+        const dm = all[this.danmakuSpawnIdx]
+        this.danmakuSpawnIdx++
+        // 过长文本截断，避免遮挡整个画面
+        let text = dm.text
+        if (text.length > 18) text = text.substring(0, 18) + '…'
+        const y = 6 + (this.danmakuRow % tracks) * 30
+        this.danmakuRow++
+        const list = this.danmakuList.slice()
+        list.push({
+          id: this.danmakuIdSeq++,
+          text: text,
+          x: this.frameW,
+          y: y,
+          color: dm.color || '#ffffff'
+        })
+        this.danmakuList = list
+      }
+      // 循环播放：游标越过末尾后归零，重新派发
+      if (this.danmakuSpawnIdx >= all.length && curTime < 0.5) {
+        this.danmakuSpawnIdx = 0
+      }
+    }, 500)
+  },
+  StopDanmaku() {
+    if (this.danmakuTimer) {
+      clearInterval(this.danmakuTimer)
+      this.danmakuTimer = null
+    }
+    if (this.danmakuSpawnTimer) {
+      clearInterval(this.danmakuSpawnTimer)
+      this.danmakuSpawnTimer = null
+    }
+    this.danmakuList = []
+  },
+  // 弹幕开关
+  ToggleDanmaku() {
+    this.danmakuEnabled = !this.danmakuEnabled
+    if (global.settings && global.settings.saveSettings) {
+      global.settings.saveSettings({ enableDanmaku: this.danmakuEnabled })
+    }
+    if (this.danmakuEnabled) {
+      this.StartDanmaku()
+    } else {
+      this.StopDanmaku()
+    }
+  },
+  // 进度条滑动拖拽：slider 0~actualTotalFrames-1 直接对应帧序号
+  OnSliderChange(e) {
+    if (this.actualTotalFrames <= 0) return
+    let frame = 0
+    if (e && e.progress !== undefined) {
+      frame = Math.round(e.progress)
+    } else if (e && e.value !== undefined) {
+      frame = Math.round(e.value)
+    }
+    frame = Math.max(0, Math.min(frame, this.actualTotalFrames - 1))
+    this.currentFrame = frame
+    this.frameFloat = frame
+    this.UpdateFrameDisplay()
+  },
+  ExitPage() {
+    this.PausePlay()
+    this.StopDanmaku()
+    router.back()
+  }
+}
+</script>
+
+<style lang="less">
+@import '@less/global.less';
+
+.page {
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+.top-bar {
+  flex-direction: row;
+  align-items: center;
+  width: 100%;
+  height: 44px;
+  margin-top: 4px;
+}
+
+.back-btn {
+  width: 80px;
+  height: 44px;
+  justify-content: center;
+  align-items: center;
+}
+
+.back-text {
+  font-size: 22px;
+  color: #9e9e9e;
+  font-weight: 600;
+}
+
+.title-text {
+  flex: 1;
+  text-align: center;
+  font-size: 22px;
+  color: #ffffff;
+  font-weight: 600;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+
+.placeholder-btn {
+  width: 80px;
+  height: 44px;
+}
+
+/* 雪碧图视口：严格裁剪到单帧尺寸，溢出的相邻格子绝不露出 */
+.player-viewport {
+  margin-top: 12px;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+/* 雪碧图播放区（弹幕叠加其上） */
+.player-area {
+  background-color: #1a1a1a;
+  overflow: hidden;
+  position: relative;
+}
+
+/* 就绪提示文字（图片下方） */
+.ready-hint {
+  margin-top: 10px;
+  font-size: 17px;
+  color: #FB7299;
+  text-align: center;
+  lines: 1;
+}
+
+.frame-img {
+  position: absolute;
+  left: 0px;
+  top: 0px;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* 占位图（传输中/未就绪） */
+.placeholder-box {
+  position: absolute;
+  left: 0px;
+  top: 0px;
+  width: 100%;
+  height: 100%;
+  justify-content: center;
+  align-items: center;
+  background-color: #000000;
+}
+
+.placeholder-img {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  opacity: 0.35;
+}
+
+/* 弹幕层：与视频区域完全重叠 */
+.danmaku-layer {
+  position: absolute;
+  left: 0px;
+  top: 0px;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.danmaku-item {
+  font-size: 24px;
+  color: #ffffff;
+  font-weight: 600;
+  white-space: nowrap;
+  background-color: rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+  padding-left: 6px;
+  padding-right: 6px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+.loading-overlay {
+  position: absolute;
+  left: 0px;
+  top: 0px;
+  width: 100%;
+  height: 100%;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.6);
+}
+
+.error-overlay {
+  background-color: rgba(0, 0, 0, 0.85);
+}
+
+.loading-text {
+  font-size: 18px;
+  color: #ffffff;
+  text-align: center;
+  padding-left: 20px;
+  padding-right: 20px;
+  lines: 2;
+}
+
+.loading-title {
+  font-size: 24px;
+  color: #FB7299;
+  font-weight: 700;
+  text-align: center;
+}
+
+.loading-sub {
+  margin-top: 10px;
+  font-size: 15px;
+  color: #9e9e9e;
+  text-align: center;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+/* 传输进度条 */
+.transfer-bar-bg {
+  margin-top: 14px;
+  width: 220px;
+  height: 8px;
+  border-radius: 4px;
+  background-color: #333333;
+  overflow: hidden;
+}
+
+.transfer-bar {
+  height: 8px;
+  border-radius: 4px;
+  background-color: #FB7299;
+}
+
+/* 进度区：可拖拽 slider + 第X张/共Y张 */
+.progress-wrap {
+  margin-top: 10px;
+  flex-direction: column;
+  align-items: center;
+}
+
+.frame-slider {
+  width: 100%;
+  height: 50px;
+  block-color: #FB7299;
+  selected-color: #FB7299;
+}
+
+.frame-text {
+  margin-top: 2px;
+  font-size: 18px;
+  color: #9e9e9e;
+  font-weight: 500;
+  text-align: center;
+}
+
+/* 下方控制按钮 */
+.controls-block {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.ctrl-btn {
+  height: 52px;
+  justify-content: center;
+  align-items: center;
+  border-radius: 26px;
+  background-color: #262626;
+  margin-left: 4px;
+  margin-right: 4px;
+}
+
+.ctrl-btn-slow {
+  width: 60px;
+}
+
+.ctrl-btn-play {
+  width: 72px;
+  background-color: #FB7299;
+}
+
+.ctrl-btn-fast {
+  width: 60px;
+}
+
+.ctrl-btn-danmaku {
+  width: 72px;
+}
+
+.ctrl-btn-danmaku-on {
+  background-color: #FB7299;
+}
+
+.ctrl-icon {
+  font-size: 19px;
+  color: #ffffff;
+  font-weight: 600;
+  text-align: center;
+}
+
+.ctrl-icon-play {
+  color: #ffffff;
+}
+</style>

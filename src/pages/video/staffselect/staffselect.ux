@@ -1,0 +1,162 @@
+<import name="title-bar" src="@components/TitleBar/TitleBar.ux"></import>
+
+<template>
+  <div class="page">
+    <scroll class="scroll {{scrclass}}" scroll-y="true" bounces="true">
+      <title-bar title="联合创作者"></title-bar>
+      <text class="staff-video-title" if="{{videoTitle}}">{{ videoTitle }}</text>
+
+      <div class="empty-tip" if="{{staffList.length === 0}}">
+        <text class="empty-text">暂无联合创作信息</text>
+      </div>
+
+      <div class="staff-list" for="{{staffList}}">
+        <div class="staff-item" @click="OpenUserHome($item.mid)">
+          <image class="staff-face" src="{{ $item.face || '/common/default_profile_img.png' }}"></image>
+          <div class="staff-info">
+            <text class="staff-name">{{ $item.name }}</text>
+            <text class="staff-role">分工：{{ $item.title || 'UP主' }}</text>
+          </div>
+          <image class="staff-arrow" src="/common/vidtool_intro.png"></image>
+        </div>
+      </div>
+
+      <text style="margin-top: 20px"></text>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import router from "@system.router"
+
+export default {
+  public: {
+    staff: '',
+    videoTitle: ''
+  },
+  private: {
+    scrclass: "",
+    staffList: []
+  },
+  onInit() {
+    this.ParseStaff()
+  },
+  ParseStaff() {
+    try {
+      if (!this.staff) {
+        this.staffList = []
+        return
+      }
+      const raw = JSON.parse(this.staff)
+      if (!Array.isArray(raw)) {
+        this.staffList = []
+        return
+      }
+      this.staffList = raw.map(function (s) {
+        return {
+          mid: s.mid,
+          name: s.name || '未知UP主',
+          face: s.face || '',
+          title: s.title || 'UP主'
+        }
+      })
+    } catch (e) {
+      global.logger.error('[staffselect] ParseStaff Error: ' + e.toString())
+      this.staffList = []
+    }
+  },
+  OpenUserHome(mid) {
+    router.push({
+      uri: "pages/user",
+      params: {
+        uid: mid
+      }
+    })
+  }
+}
+</script>
+
+<style lang="less">
+@import '@less/global.less';
+
+.staff-video-title {
+  font-size: 22px;
+  font-weight: 600;
+  color: #ffffff;
+  margin-top: 15px;
+  width: 320px;
+  text-align: center;
+  lines: 2;
+  text-overflow: ellipsis;
+}
+
+.empty-tip {
+  flex-direction: column;
+  align-items: center;
+  margin-top: 60px;
+}
+
+.empty-text {
+  font-size: 22px;
+  color: #9e9e9e;
+}
+
+.staff-list {
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.staff-item {
+  width: 370px;
+  min-height: 96px;
+  border-radius: 24px;
+  background-color: #262626;
+  flex-direction: row;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  position: relative;
+}
+
+.staff-face {
+  width: 64px;
+  height: 64px;
+  border-radius: 32px;
+  object-fit: cover;
+  margin-left: 15px;
+}
+
+.staff-info {
+  flex: 1;
+  margin-left: 12px;
+  margin-right: 40px;
+  flex-direction: column;
+}
+
+.staff-name {
+  font-size: 26px;
+  color: #ffffff;
+  font-weight: 600;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+
+.staff-role {
+  font-size: 20px;
+  color: #FB7299;
+  margin-top: 6px;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+
+.staff-arrow {
+  position: absolute;
+  right: 15px;
+  width: 24px;
+  height: 24px;
+  object-fit: scale-down;
+  opacity: 0.5;
+}
+</style>

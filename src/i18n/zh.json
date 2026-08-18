@@ -115,6 +115,7 @@
         "title": "设置",
         "videoPushRelevance": "视频推荐相关性",
         "videoPushCount": "首页视频推荐数",
+        "keepScreenOn": "屏幕常亮",
         "enableFullAnimation": "启用完整动画",
         "enableCommentImages": "评论区图片显示",
         "performanceSettings": "性能设置",
