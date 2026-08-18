@@ -15,29 +15,21 @@
     <div class="player-viewport" style="width: {{frameW}}px; height: {{frameH}}px;">
       <div class="player-area" style="width: {{frameW}}px; height: {{frameH}}px;">
         <!-- 逐帧播放：直接显示 CDN 裁切好的单帧小图（约160×90），
-             手表每次只解码一张单帧，绝不整张解码雪碧图，避免卡死/重启 -->
+             手表每次只解码一张单帧，绝不整张解码雪碧图，避免卡死/重启。
+             不做全量预加载，交给 image 组件按需加载，避免短时间解码大量图片导致重启 -->
         <image class="frame-img"
-               if="{{!transferring && readyToPlay && currentFrameUrl}}"
+               if="{{!loadError && currentFrameUrl}}"
                src="{{currentFrameUrl}}"></image>
-        <div class="placeholder-box" if="{{transferring || !readyToPlay || !currentFrameUrl}}">
+        <div class="placeholder-box" if="{{!loadError && !currentFrameUrl}}">
           <image class="placeholder-img" src="/common/vidtool_intro.png"></image>
         </div>
 
         <!-- 弹幕层：与视频同尺寸叠加 -->
-        <div class="danmaku-layer" if="{{danmakuEnabled && readyToPlay}}">
+        <div class="danmaku-layer" if="{{danmakuEnabled && !loadError}}">
           <text class="danmaku-item" for="(index,item) in danmakuList" tid="danmaku"
                 style="position: absolute; left: {{item.x}}px; top: {{item.y}}px; color: {{item.color}};">{{item.text}}</text>
         </div>
 
-        <!-- 传输中进度层 -->
-        <div class="loading-overlay" if="{{transferring}}">
-          <text class="loading-title">传输中</text>
-          <text class="loading-text">剩余{{remainingFrames}}帧 / 共{{totalTransferFrames}}帧</text>
-          <div class="transfer-bar-bg">
-            <div class="transfer-bar" style="width: {{transferPercent}}%"></div>
-          </div>
-          <text class="loading-sub">手机→手表缓存中，请勿退出</text>
-        </div>
         <!-- 加载/错误提示 -->
         <div class="loading-overlay" if="{{loading}}">
           <text class="loading-text">{{loadStatus}}</text>
@@ -49,18 +41,18 @@
     </div>
 
     <!-- 就绪提示：放在图片下方，纯文字，不遮挡/影响视频的暂停与播放 -->
-    <text class="ready-hint" if="{{!transferring && readyToPlay && !isPlaying && !loadError}}">
-      手表已保存，点击下方播放按钮开始
+    <text class="ready-hint" if="{{!loadError && !isPlaying && currentFrameUrl}}">
+      点击下方播放按钮开始
     </text>
 
     <!-- 进度：可滑动拖拽，下方显示第X张/共Y张 -->
-    <div class="progress-wrap" if="{{!loadError && readyToPlay}}" style="width: {{frameW}}px;">
+    <div class="progress-wrap" if="{{!loadError && currentFrameUrl}}" style="width: {{frameW}}px;">
       <slider class="frame-slider" min="0" max="{{sliderMax}}" value="{{currentFrame}}" @change="OnSliderChange"></slider>
       <text class="frame-text">第{{currentFrame + 1}}张 / 共{{actualTotalFrames}}张 · {{speedLabel}}</text>
     </div>
 
     <!-- 下方控制按钮：慢放、暂停/播放、快进、弹幕开关 -->
-    <div class="controls-block" if="{{!loadError && readyToPlay}}">
+    <div class="controls-block" if="{{!loadError && currentFrameUrl}}">
       <div class="ctrl-btn ctrl-btn-slow" @click="SlowDown">
         <text class="ctrl-icon">慢放</text>
       </div>
@@ -110,14 +102,17 @@ export default {
     isPlaying: false,
     currentFrame: 0,
     playTimer: null,
-    baseFps: 15,
-    // 播放倍速：以 0.25x 为标准流速，向左慢放、向右快进
-    playSpeed: 0.25,
-    speedIndex: 1,
-    speedOptions: [0.125, 0.25, 0.5, 1, 1.5, 2],
-    speedLabels: ['0.125x', '标准', '0.5x', '1x', '1.5x', '2x'],
+    // 参考实现以 700ms/帧 为基准；为兼顾手表流畅度，标准(1倍速)取 280ms/帧
+    // （约为参考的0.25流速，更顺滑），并以此为1倍速向两边做慢放/快进。
+    baseFrameMs: 280,
+    // 以“标准”为1倍速：左侧慢放、右侧快进
+    playSpeed: 1,
+    speedIndex: 2,
+    speedOptions: [0.5, 0.75, 1, 1.25, 1.5, 2],
+    speedLabels: ['0.5x', '0.75x', '标准', '1.25x', '1.5x', '2x'],
     speedLabel: '标准',
-    frameFloat: 0,
+    // 每一帧对应的真实视频时间戳（秒），来自B站 videoshot 的 index[]，用于弹幕时间对齐
+    frameTimestamps: [],
     // 弹幕
     danmakuEnabled: true,
     danmakuMaxCount: 5,
@@ -132,19 +127,7 @@ export default {
     // 状态
     loading: true,
     loadError: false,
-    loadStatus: '加载中...',
-    // 渐进式"传输"（逐张雪碧图预解码到手表缓存）
-    // 手机侧已下载的雪碧图在进入播放页时不立即整批解码（过猛会导致手表重启），
-    // 而是逐张加载/解码到本地，每张之间留出节流间隔，完成后才允许点击播放。
-    transferring: false,
-    readyToPlay: false,
-    totalTransferFrames: 0,
-    transferredFrames: 0,
-    remainingFrames: 0,
-    transferPercent: 0,
-    transferIndex: 0,
-    transferTimer: null,
-    preloadImg: null
+    loadStatus: '加载中...'
   },
   computed: {
     getBgImg() {
@@ -160,7 +143,7 @@ export default {
     // 且播放过程中可能需要手机辅助解码，因此请保持手机在身旁并已连接
     prompt.showDialog({
       title: "播放提示",
-      message: "手环本体不具备独立联网能力，雪碧图逐帧数据需要通过已连接的手机蓝牙通道获取与校验。请确认手机就在身旁且与手环保持连接，否则可能无法正常播放。",
+      message: "雪碧图逐帧画面来自B站在线服务器，播放时需要手表联网（eSIM/Wi-Fi，或手机蓝牙共享网络）。请保持网络畅通。",
       buttons: [
         { text: "我知道了", color: "#FB7299" }
       ],
@@ -175,20 +158,10 @@ export default {
   onHide() {
     this.PausePlay()
     this.StopDanmaku()
-    this.StopTransfer()
   },
   onDestroy() {
     this.PausePlay()
     this.StopDanmaku()
-    this.StopTransfer()
-  },
-  // 中断渐进传输（退出页面时）
-  StopTransfer() {
-    this.transferring = false
-    if (this.transferTimer) {
-      clearTimeout(this.transferTimer)
-      this.transferTimer = null
-    }
   },
   // 读取缓存并初始化播放
   async InitSpriteData() {
@@ -240,6 +213,10 @@ export default {
         ? Math.min(this.totalFrames, this.frameList.length)
         : this.totalFrames
       this.sliderMax = Math.max(0, this.actualTotalFrames - 1)
+      // 真实帧时间戳（用于弹幕对齐）；缺失时由 GetCurrentVideoTime 回退估算
+      this.frameTimestamps = (frameData.index && Array.isArray(frameData.index))
+        ? frameData.index.slice(0, this.actualTotalFrames)
+        : []
 
       if (this.actualTotalFrames <= 0) {
         this.loadError = true
@@ -257,82 +234,20 @@ export default {
         + ", cell=" + this.imgX + "x" + this.imgY + ", display=" + this.frameW + "x" + this.frameH)
 
       this.currentFrame = 0
-      this.currentFrameUrl = ''
+      // 直接显示第一帧，交给 image 组件按需加载/解码。
+      // 关键：不要用 new Image() 批量预解码全部帧——短时间解码几百张图
+      // 正是手表点击即重启的原因。单帧仅约160×90，按需加载内存压力极小。
+      this.currentFrameUrl = this.frameList[0] || ''
       this.loading = false
-
-      // 逐帧小图解码极轻（单帧约160×90≈57KB RGBA），按帧渐进预加载并显示进度，
-      // 每张之间节流，避免连续网络/解码造成卡顿。
-      this.BeginTransfer()
+      global.logger.log("[spriteplayer] ready, frames=" + this.actualTotalFrames)
+      // 弹幕可在初始化时后台拉取（不阻塞画面，不涉及图片解码）
+      this.LoadDanmaku()
     } catch (e) {
       global.logger.error("[spriteplayer] InitSpriteData error: " + e.toString())
       this.loadError = true
       this.loadStatus = '加载失败'
       this.loading = false
     }
-  },
-  // 渐进式传输：逐帧预加载单帧小图，每帧之间节流
-  BeginTransfer() {
-    const count = this.actualTotalFrames
-    if (count <= 0) {
-      this.loadError = true
-      this.loadStatus = '无可用帧'
-      return
-    }
-    this.transferring = true
-    this.readyToPlay = false
-    this.transferIndex = 0
-    this.transferredFrames = 0
-    this.totalTransferFrames = count
-    this.remainingFrames = count
-    this.transferPercent = 0
-    global.logger.log("[spriteplayer] begin frame transfer, frames=" + count)
-    this.TransferNext()
-  },
-  // 预加载单帧小图：触发解码并进入图像缓存
-  PreloadImage(url) {
-    return new Promise((resolve) => {
-      try {
-        const img = new Image()
-        img.onload = () => { resolve(true) }
-        img.onerror = () => { resolve(false) }
-        img.src = url
-      } catch (e) {
-        resolve(true)
-      }
-    })
-  },
-  TransferNext() {
-    if (!this.transferring) return
-    if (this.transferIndex >= this.actualTotalFrames) {
-      this.FinishTransfer()
-      return
-    }
-    const url = this.frameList[this.transferIndex]
-    this.PreloadImage(url).then(() => {
-      if (!this.transferring) return
-      this.transferIndex++
-      this.transferredFrames = this.transferIndex
-      this.remainingFrames = Math.max(0, this.totalTransferFrames - this.transferIndex)
-      this.transferPercent = Math.floor((this.transferredFrames / this.totalTransferFrames) * 100)
-      // 节流：每帧之间留出 40ms，让解码/GC 平稳进行
-      this.transferTimer = setTimeout(() => {
-        this.TransferNext()
-      }, 40)
-    })
-  },
-  FinishTransfer() {
-    this.transferring = false
-    this.readyToPlay = true
-    this.transferPercent = 100
-    this.remainingFrames = 0
-    if (this.transferTimer) {
-      clearTimeout(this.transferTimer)
-      this.transferTimer = null
-    }
-    // 就绪后显示第一帧（仍不自动播放，等待用户点击）
-    this.currentFrameUrl = this.frameList[0] || ''
-    global.logger.log("[spriteplayer] transfer complete, ready to play")
-    this.LoadDanmaku()
   },
   // 从B站XML接口获取真实弹幕
   async LoadDanmaku() {
@@ -372,22 +287,15 @@ export default {
   StartPlay() {
     if (this.actualTotalFrames <= 0 || this.playTimer) return
     this.isPlaying = true
-    // 以固定基础帧率驱动，用帧累加支持慢放(小于1)与快进(大于1)，避免反复重建定时器
-    const tickMs = Math.round(1000 / this.baseFps)
-    this.frameFloat = this.currentFrame
+    // 参考实现：每帧固定间隔 = 基础间隔 / 倍速。
+    // baseFrameMs(700ms) 为标准(1倍速)下每帧停留时长；playSpeed 越大切帧越快。
+    const interval = Math.max(80, Math.round(this.baseFrameMs / this.playSpeed))
     this.playTimer = setInterval(() => {
-      this.frameFloat += this.playSpeed
-      let next = Math.floor(this.frameFloat)
-      if (next >= this.actualTotalFrames) {
-        // 循环播放
-        this.frameFloat = this.frameFloat % this.actualTotalFrames
-        next = Math.floor(this.frameFloat)
-      }
-      if (next !== this.currentFrame) {
-        this.currentFrame = next
-        this.UpdateFrameDisplay()
-      }
-    }, tickMs)
+      let next = this.currentFrame + 1
+      if (next >= this.actualTotalFrames) next = 0
+      this.currentFrame = next
+      this.UpdateFrameDisplay()
+    }, interval)
   },
   PausePlay() {
     if (this.playTimer) {
@@ -397,15 +305,14 @@ export default {
     this.isPlaying = false
   },
   TogglePlay() {
-    // 传输未完成时不允许播放
-    if (!this.readyToPlay) {
-      prompt.showToast({ message: '传输中，请稍候' })
+    if (this.actualTotalFrames <= 0) {
+      prompt.showToast({ message: '暂无可播放帧' })
       return
     }
     if (this.isPlaying) {
       this.PausePlay()
     } else {
-      // 首次点击播放时启动弹幕（传输阶段不启动，降低负载）
+      // 首次点击播放时启动弹幕
       if (this.danmakuEnabled && this.danmakuAll.length >= 0 && !this.danmakuTimer) {
         this.StartDanmaku()
       }
@@ -440,9 +347,14 @@ export default {
     }
   },
   // 弹幕：按当前播放时间派发真实弹幕，叠加在视频之上滚动
-  // 当前雪碧图对应的“视频时间”（秒）= 帧序号 / 基础帧率
+  // 当前雪碧图对应的真实视频时间（秒）：优先用 videoshot 的 index[] 时间戳，
+  // 回退为 帧号 × 单帧时长(0.7s)。
   GetCurrentVideoTime() {
-    return this.currentFrame / this.baseFps
+    if (this.frameTimestamps && this.frameTimestamps.length > this.currentFrame
+      && typeof this.frameTimestamps[this.currentFrame] === 'number') {
+      return this.frameTimestamps[this.currentFrame]
+    }
+    return this.currentFrame * (this.baseFrameMs / 1000)
   },
   StartDanmaku() {
     if (!this.danmakuEnabled) return
@@ -538,7 +450,6 @@ export default {
     }
     frame = Math.max(0, Math.min(frame, this.actualTotalFrames - 1))
     this.currentFrame = frame
-    this.frameFloat = frame
     this.UpdateFrameDisplay()
   },
   ExitPage() {
@@ -691,38 +602,6 @@ export default {
   padding-left: 20px;
   padding-right: 20px;
   lines: 2;
-}
-
-.loading-title {
-  font-size: 24px;
-  color: #FB7299;
-  font-weight: 700;
-  text-align: center;
-}
-
-.loading-sub {
-  margin-top: 10px;
-  font-size: 15px;
-  color: #9e9e9e;
-  text-align: center;
-  padding-left: 16px;
-  padding-right: 16px;
-}
-
-/* 传输进度条 */
-.transfer-bar-bg {
-  margin-top: 14px;
-  width: 220px;
-  height: 8px;
-  border-radius: 4px;
-  background-color: #333333;
-  overflow: hidden;
-}
-
-.transfer-bar {
-  height: 8px;
-  border-radius: 4px;
-  background-color: #FB7299;
 }
 
 /* 进度区：可拖拽 slider + 第X张/共Y张 */
