@@ -125,7 +125,7 @@ HyperBilibili/
 
 ## 📝 开发约定
 
-开发前 **务必阅读 [AGENTS.md](./AGENTS.md)**，核心要点摘要：
+开发前 **务必阅读 PROJECT_ARCHITECTURE.md**，核心要点摘要：
 
 - **`.ux` 语法 ≠ Vue**，改动前对照 `VelaDocs/guide/framework/`（已从仓库移除，见官方文档）。
 - 布局 = **Flex + 显式 `flex-direction`**；盒模型为 `border-box`；定位仅支持 `relative / absolute`。
