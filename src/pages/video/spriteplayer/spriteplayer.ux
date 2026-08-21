@@ -1,7 +1,5 @@
 <template>
   <div class="page">
-    <image style="position: absolute; left: 0px" src="{{getBgImg}}"></image>
-
     <!-- 顶部：标题 + 返回 -->
     <div class="top-bar">
       <div class="back-btn" @click="ExitPage">
@@ -11,18 +9,13 @@
       <div class="placeholder-btn"></div>
     </div>
 
-    <!-- 雪碧图播放区（弹幕叠加在视频之上） -->
-    <div class="player-viewport" style="width: {{frameW}}px; height: {{frameH}}px;">
-      <div class="player-area" style="width: {{frameW}}px; height: {{frameH}}px;">
+    <!-- 雪碧图播放区（弹幕叠加在视频之上）。固定 336×189(16:9)，与源帧比例一致。 -->
+    <div class="player-viewport">
         <!-- 逐帧播放：直接显示 CDN 裁切好的单帧小图（约160×90），
              手表每次只解码一张单帧，绝不整张解码雪碧图，避免卡死/重启。
-             不做全量预加载，交给 image 组件按需加载，避免短时间解码大量图片导致重启 -->
+             不做全量预加载，交给 image 组件按需加载。 -->
         <image class="frame-img"
-               if="{{!loadError && currentFrameUrl}}"
                src="{{currentFrameUrl}}"></image>
-        <div class="placeholder-box" if="{{!loadError && !currentFrameUrl}}">
-          <image class="placeholder-img" src="/common/vidtool_intro.png"></image>
-        </div>
 
         <!-- 弹幕层：与视频同尺寸叠加 -->
         <div class="danmaku-layer" if="{{danmakuEnabled && !loadError}}">
@@ -37,22 +30,21 @@
         <div class="loading-overlay error-overlay" if="{{!loading && loadError}}">
           <text class="loading-text">{{loadStatus}}</text>
         </div>
-      </div>
     </div>
 
     <!-- 就绪提示：放在图片下方，纯文字，不遮挡/影响视频的暂停与播放 -->
-    <text class="ready-hint" if="{{!loadError && !isPlaying && currentFrameUrl}}">
+    <text class="ready-hint" if="{{!loadError && !isPlaying && framesReady}}">
       点击下方播放按钮开始
     </text>
 
     <!-- 进度：可滑动拖拽，下方显示第X张/共Y张 -->
-    <div class="progress-wrap" if="{{!loadError && currentFrameUrl}}" style="width: {{frameW}}px;">
+    <div class="progress-wrap" if="{{!loadError && framesReady}}">
       <slider class="frame-slider" min="0" max="{{sliderMax}}" value="{{currentFrame}}" @change="OnSliderChange"></slider>
       <text class="frame-text">第{{currentFrame + 1}}张 / 共{{actualTotalFrames}}张 · {{speedLabel}}</text>
     </div>
 
     <!-- 下方控制按钮：慢放、暂停/播放、快进、弹幕开关 -->
-    <div class="controls-block" if="{{!loadError && currentFrameUrl}}">
+    <div class="controls-block" if="{{!loadError && framesReady}}">
       <div class="ctrl-btn ctrl-btn-slow" @click="SlowDown">
         <text class="ctrl-icon">慢放</text>
       </div>
@@ -85,7 +77,17 @@ export default {
     scrclass: "",
     // 逐帧数据：每一帧一个 CDN 裁切好的单帧小图地址，播放时逐张切换 src
     frameList: [],
-    currentFrameUrl: '',
+    // 帧画面 image 常驻（参考补丁版只用切换 src，不销毁/重建 image 元素，
+    // 避免手表反复分配/释放位图导致重启）。初始显示本地占位图。
+    currentFrameUrl: '/common/vidtool_intro.png',
+    framesReady: false,
+    // 逐帧按需裁切所需的“原始雪碧图基址 + 原始单帧尺寸”（由 video.ts 缓存）。
+    // 播放时用它逐帧现场构造单帧 URL，避免把数百条 frameList 一次性常驻内存。
+    originalImages: [],
+    originalImgX: 160,
+    originalImgY: 90,
+    originalCols: 10,
+    originalRows: 10,
     imgX: 160,
     imgY: 90,
     cols: 10,
@@ -96,15 +98,15 @@ export default {
     actualTotalFrames: 60,
     sliderMax: 59,
     // 显示布局（单帧等比放大显示）
-    frameW: 320,
-    frameH: 180,
+    frameW: 336,
+    frameH: 189,
     // 播放状态
     isPlaying: false,
     currentFrame: 0,
     playTimer: null,
-    // 参考实现以 700ms/帧 为基准；为兼顾手表流畅度，标准(1倍速)取 280ms/帧
-    // （约为参考的0.25流速，更顺滑），并以此为1倍速向两边做慢放/快进。
-    baseFrameMs: 280,
+    // 参考实现以 700ms/帧 为基准（稳定不重启）。
+    // 该间隔本身就是 B站 videoshot 逐帧的“标准流速”，以此为1倍速向两边做慢放/快进。
+    baseFrameMs: 700,
     // 以“标准”为1倍速：左侧慢放、右侧快进
     playSpeed: 1,
     speedIndex: 2,
@@ -119,20 +121,15 @@ export default {
     danmakuAll: [],
     danmakuList: [],
     danmakuTimer: null,
-    danmakuSpawnTimer: null,
     danmakuIdSeq: 0,
     danmakuSpawnIdx: 0,
     danmakuRow: 0,
     danmakuTracks: 3,
+    danmakuReleaseCounter: 0,
     // 状态
     loading: true,
     loadError: false,
     loadStatus: '加载中...'
-  },
-  computed: {
-    getBgImg() {
-      return global.bgimg ? global.bgimg.GetCurrentBgImg() : ""
-    }
   },
   onInit() {
     global.logger.log("[spriteplayer] onInit")
@@ -163,7 +160,26 @@ export default {
     this.PausePlay()
     this.StopDanmaku()
   },
-  // 读取缓存并初始化播放
+  // 按帧号即时获取单帧 CDN 裁切地址（逐帧获取，不预构建全部 URL）。
+  // 优先用缓存里的原始雪碧图基址+原始单帧尺寸现场构造；旧缓存没有这些字段时，
+  // 回退到已预构建的 frameList 数组取值。
+  GetFrameUrl(frameIdx) {
+    if (frameIdx < 0 || frameIdx >= this.actualTotalFrames) return ''
+    if (this.originalImages && this.originalImages.length > 0) {
+      const source = {
+        image: this.originalImages,
+        img_x_size: this.originalImgX,
+        img_y_size: this.originalImgY,
+        img_x_len: this.originalCols,
+        img_y_len: this.originalRows
+      }
+      const url = global.biliclient.buildVideoFrameCropUrl(source, frameIdx)
+      if (url) return url
+    }
+    if (this.frameList && this.frameList.length > frameIdx) return this.frameList[frameIdx]
+    return ''
+  },
+  // 从缓存读取雪碧图数据并初始化播放（内存关键：不预解码任何帧，仅设置首帧 URL）
   async InitSpriteData() {
     try {
       const jsonStr = await global.savedcontent.SavedContentManager.getContent(this.cachedSpriteId)
@@ -189,10 +205,17 @@ export default {
       this.rows = frameData.img_y_len || frameData.img_rows || 10
       this.cropRows = frameData.crop_rows || this.rows
 
-      // 逐帧 CDN 裁切地址列表：每帧一个小图 URL（由 video.ts 在下载时生成）。
-      // 旧缓存没有该字段时，用当前帧数据即时构建（回退兼容）。
+      // 逐帧裁切所需的“原始雪碧图基址 + 原始单帧尺寸”（新版缓存由 video.ts 写入）。
+      // 播放时据此逐帧现场构造单帧 CDN 裁切地址，不把数百条 URL 一次性常驻内存。
+      this.originalImages = frameData.originalImages || []
+      this.originalImgX = frameData.originalImgX || frameData.img_x || frameData.img_x_size || 160
+      this.originalImgY = frameData.originalImgY || frameData.img_y || frameData.img_y_size || 90
+      this.originalCols = frameData.originalCols || frameData.img_x_len || frameData.img_cols || 10
+      this.originalRows = frameData.originalRows || frameData.img_y_len || frameData.img_rows || 10
+
+      // 旧缓存没有 originalImages 时，回退使用预构建的 frameList（仍逐帧切换 <image>）。
       let frameList = frameData.frameList
-      if (!frameList || frameList.length === 0) {
+      if ((!this.originalImages || this.originalImages.length === 0) && (!frameList || frameList.length === 0)) {
         if (global.biliclient.buildVideoFrameCropList) {
           frameList = global.biliclient.buildVideoFrameCropList(frameData)
         } else {
@@ -206,16 +229,30 @@ export default {
         return u
       })
 
-      // 帧数：以 frameList 长度为准（跨所有雪碧图的总帧数）
+      // 帧数：以可用帧数为准（优先即时裁切，其次 frameList 长度）
       this.framesPerImage = this.cols * this.rows
-      this.totalFrames = frameData.total_frames || parsed.frameCount || this.frameList.length || (this.cols * this.cropRows)
-      this.actualTotalFrames = this.frameList.length > 0
-        ? Math.min(this.totalFrames, this.frameList.length)
+      const onlineFrameCount = this.originalImages.length > 0
+        ? this.originalImages.length * this.framesPerImage
+        : this.frameList.length
+      this.totalFrames = frameData.total_frames || parsed.frameCount || onlineFrameCount || (this.cols * this.cropRows)
+      this.actualTotalFrames = onlineFrameCount > 0
+        ? Math.min(this.totalFrames, onlineFrameCount)
         : this.totalFrames
       this.sliderMax = Math.max(0, this.actualTotalFrames - 1)
-      // 真实帧时间戳（用于弹幕对齐）；缺失时由 GetCurrentVideoTime 回退估算
+      // 真实帧时间戳（用于弹幕对齐）；B站 videoshot 的 index[] 单位是厘秒(1/100秒)，
+      // 且 index[0]=0、index[i] 为第 i-1 帧起始时间、末尾元素为结束时间。
+      // 故第 i 帧对应的时间应取 index[i+1]/100（与参考实现一致），否则整体错位一帧。
+      // 缺失时由 GetCurrentVideoTime 回退估算。
       this.frameTimestamps = (frameData.index && Array.isArray(frameData.index))
-        ? frameData.index.slice(0, this.actualTotalFrames)
+        ? (() => {
+            const arr = frameData.index
+            const out = []
+            for (let i = 0; i < this.actualTotalFrames; i++) {
+              const t = (i + 1 < arr.length) ? arr[i + 1] : (arr[i] || 0)
+              out.push(typeof t === 'number' ? t / 100 : 0)
+            }
+            return out
+          })()
         : []
 
       if (this.actualTotalFrames <= 0) {
@@ -225,19 +262,19 @@ export default {
         return
       }
 
-      // 单帧显示尺寸：单帧小图等比放大铺满宽度（约350px）
-      const screenW = (global.DEVICE_INFO && global.DEVICE_INFO.screenWidth) || 390
-      this.frameW = Math.min(350, screenW - 30)
-      this.frameH = Math.round((this.frameW / this.imgX) * this.imgY)
+      // 显示尺寸固定为 336×189（16:9），与源帧比例一致，对齐参考补丁版实现。
+      this.frameW = 336
+      this.frameH = 189
 
       global.logger.log("[spriteplayer] per-frame mode: frames=" + this.actualTotalFrames
-        + ", cell=" + this.imgX + "x" + this.imgY + ", display=" + this.frameW + "x" + this.frameH)
+        + ", cell=" + this.originalImgX + "x" + this.originalImgY + ", display=" + this.frameW + "x" + this.frameH)
 
       this.currentFrame = 0
       // 直接显示第一帧，交给 image 组件按需加载/解码。
       // 关键：不要用 new Image() 批量预解码全部帧——短时间解码几百张图
       // 正是手表点击即重启的原因。单帧仅约160×90，按需加载内存压力极小。
-      this.currentFrameUrl = this.frameList[0] || ''
+      this.currentFrameUrl = this.GetFrameUrl(0)
+      this.framesReady = true
       this.loading = false
       global.logger.log("[spriteplayer] ready, frames=" + this.actualTotalFrames)
       // 弹幕可在初始化时后台拉取（不阻塞画面，不涉及图片解码）
@@ -277,12 +314,13 @@ export default {
       this.danmakuAll = []
     }
   },
-  // 更新当前帧：直接切换到该帧对应的 CDN 裁切单张小图地址。
-  // 每帧都是独立的小图（约160×90），手表一次只解码一张单帧，绝不解码整张雪碧图。
+  // 内存关键：单 <image> 绑定，只改 src，不预加载/不缓存 Image 对象，
+  // 旧位图由框架在 src 切换后自然释放。逐帧按需构造当前帧 URL。
   UpdateFrameDisplay() {
-    if (!this.frameList || this.frameList.length === 0) return
-    if (this.currentFrame < 0 || this.currentFrame >= this.frameList.length) return
-    this.currentFrameUrl = this.frameList[this.currentFrame]
+    if (this.actualTotalFrames <= 0) return
+    if (this.currentFrame < 0 || this.currentFrame >= this.actualTotalFrames) return
+    const url = this.GetFrameUrl(this.currentFrame)
+    if (url) this.currentFrameUrl = url
   },
   StartPlay() {
     if (this.actualTotalFrames <= 0 || this.playTimer) return
@@ -370,61 +408,69 @@ export default {
       }
     }
     this.danmakuRow = 0
-    // 弹幕移动定时器
+    this.danmakuReleaseCounter = 0
+    // 单一定时器：每 50ms 推进弹幕位移；派发节流（每若干 tick 释放一条），
+    // 避免双定时器 + 每帧全量 slice 重渲染造成 CPU/内存尖峰导致手表重启。
+    const self = this
     this.danmakuTimer = setInterval(() => {
-      const list = this.danmakuList
-      for (let i = list.length - 1; i >= 0; i--) {
-        list[i].x -= 4
-        if (list[i].x < -300) list.splice(i, 1)
-      }
-      this.danmakuList = list.slice()
-    }, 80)
-    // 弹幕派发定时器：依据播放时间生成对应时刻的弹幕
-    this.danmakuSpawnTimer = setInterval(() => {
-      if (!this.danmakuAll || this.danmakuAll.length === 0) return
-      const maxCount = this.danmakuMaxCount
-      // 手环性能：在屏弹幕数量受设置项控制
-      if (this.danmakuList.length >= maxCount) return
-      const curTime = this.GetCurrentVideoTime()
-      const all = this.danmakuAll
-      // 轨道数随同屏上限增长，避免高数量时全部挤在同一行；按帧高估算可容纳轨道
-      const tracks = Math.max(this.danmakuTracks, Math.min(maxCount, Math.floor(this.frameH / 30)))
-      // 派发所有“已到时间但尚未派发”的弹幕（受在屏数量限制）
-      while (this.danmakuSpawnIdx < all.length
-        && all[this.danmakuSpawnIdx].time <= curTime
-        && this.danmakuList.length < maxCount) {
-        const dm = all[this.danmakuSpawnIdx]
-        this.danmakuSpawnIdx++
-        // 过长文本截断，避免遮挡整个画面
-        let text = dm.text
-        if (text.length > 18) text = text.substring(0, 18) + '…'
-        const y = 6 + (this.danmakuRow % tracks) * 30
-        this.danmakuRow++
-        const list = this.danmakuList.slice()
-        list.push({
-          id: this.danmakuIdSeq++,
-          text: text,
-          x: this.frameW,
-          y: y,
-          color: dm.color || '#ffffff'
-        })
-        this.danmakuList = list
-      }
-      // 循环播放：游标越过末尾后归零，重新派发
-      if (this.danmakuSpawnIdx >= all.length && curTime < 0.5) {
-        this.danmakuSpawnIdx = 0
-      }
-    }, 500)
+      self.TickDanmaku()
+    }, 50)
+  },
+  // 释放一条已到派发时间的弹幕到屏幕上
+  ReleaseOneDanmaku() {
+    const all = this.danmakuAll
+    if (!all || all.length === 0) return false
+    if (this.danmakuList.length >= this.danmakuMaxCount) return false
+    if (this.danmakuSpawnIdx >= all.length) {
+      // 循环播放：游标越过末尾后，回到开头重新派发
+      this.danmakuSpawnIdx = 0
+      this.danmakuRow = 0
+    }
+    const curTime = this.GetCurrentVideoTime()
+    // 游标尚未到时间：不派发
+    if (all[this.danmakuSpawnIdx].time > curTime) return false
+    const dm = all[this.danmakuSpawnIdx]
+    this.danmakuSpawnIdx++
+    let text = dm.text
+    if (text.length > 18) text = text.substring(0, 18) + '…'
+    const tracks = Math.max(this.danmakuTracks, Math.min(this.danmakuMaxCount, Math.floor(this.frameH / 30)))
+    const y = 6 + (this.danmakuRow % tracks) * 30
+    this.danmakuRow++
+    // 原地 push 后整体重新赋值，触发列表渲染
+    this.danmakuList.push({
+      id: this.danmakuIdSeq++,
+      text: text,
+      x: this.frameW,
+      y: y,
+      color: dm.color || '#ffffff'
+    })
+    this.danmakuList = this.danmakuList
+    return true
+  },
+  TickDanmaku() {
+    if (!this.danmakuEnabled) return
+    // 1) 推进位移，移除离屏弹幕（原地修改，避免每 tick 创建新数组）
+    const list = this.danmakuList
+    for (let i = list.length - 1; i >= 0; i--) {
+      list[i].x -= 4
+      if (list[i].x < -300) list.splice(i, 1)
+    }
+    // 2) 节流派发：每 10 个 tick（约 500ms）最多释放一条，压低瞬时渲染压力
+    this.danmakuReleaseCounter++
+    if (this.danmakuReleaseCounter >= 10) {
+      this.danmakuReleaseCounter = 0
+      const released = this.ReleaseOneDanmaku()
+      if (!released) this.danmakuReleaseCounter = 6
+    }
+    // 整体重新赋值以触发渲染
+    this.danmakuList = list
   },
   StopDanmaku() {
     if (this.danmakuTimer) {
       clearInterval(this.danmakuTimer)
       this.danmakuTimer = null
     }
-    if (this.danmakuSpawnTimer) {
-      clearInterval(this.danmakuSpawnTimer)
-      this.danmakuSpawnTimer = null
-    }
+    this.danmakuReleaseCounter = 0
     this.danmakuList = []
   },
   // 弹幕开关
@@ -508,16 +554,13 @@ export default {
 
 /* 雪碧图视口：严格裁剪到单帧尺寸，溢出的相邻格子绝不露出 */
 .player-viewport {
-  margin-top: 12px;
+  position: relative;
+  width: 336px;
+  height: 189px;
   overflow: hidden;
   border-radius: 12px;
-}
-
-/* 雪碧图播放区（弹幕叠加其上） */
-.player-area {
-  background-color: #1a1a1a;
-  overflow: hidden;
-  position: relative;
+  margin-top: 12px;
+  background-color: #000000;
 }
 
 /* 就绪提示文字（图片下方） */
@@ -533,28 +576,8 @@ export default {
   position: absolute;
   left: 0px;
   top: 0px;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-/* 占位图（传输中/未就绪） */
-.placeholder-box {
-  position: absolute;
-  left: 0px;
-  top: 0px;
-  width: 100%;
-  height: 100%;
-  justify-content: center;
-  align-items: center;
-  background-color: #000000;
-}
-
-.placeholder-img {
-  width: 80px;
-  height: 80px;
-  object-fit: contain;
-  opacity: 0.35;
+  width: 336px;
+  height: 189px;
 }
 
 /* 弹幕层：与视频区域完全重叠 */
@@ -606,6 +629,7 @@ export default {
 
 /* 进度区：可拖拽 slider + 第X张/共Y张 */
 .progress-wrap {
+  width: 336px;
   margin-top: 10px;
   flex-direction: column;
   align-items: center;

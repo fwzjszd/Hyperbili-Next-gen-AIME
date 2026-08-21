@@ -136,11 +136,7 @@ export default {
     }
   },
   OnSpriteClick() {
-    if (this.spriteCached) {
-      this.OpenSpriteViewer()
-    } else {
-      this.DownloadSprite()
-    }
+    prompt.showToast({ message: '该功能正在开发中' })
   },
   async DownloadSprite() {
     if (this.downloadingSprite) return
@@ -193,8 +189,11 @@ export default {
     const fCols = lowFrameData.img_x_len || lowFrameData.img_cols || 10
     const fRows = lowFrameData.img_y_len || lowFrameData.img_rows || 10
     const perImage = fCols * fRows
+    // 总帧数：B站 videoshot 的 index[] 长度=帧数+1（末尾为结束时间），有效帧=index.length-1
     const totalThumbs = lowFrameData.total_frames
-      || (lowFrameData.index && Array.isArray(lowFrameData.index) ? lowFrameData.index.length : perImage)
+      || (lowFrameData.index && Array.isArray(lowFrameData.index) && lowFrameData.index.length > 1
+        ? lowFrameData.index.length - 1
+        : perImage)
     const sheetCount = lowFrameData.image_count || lowFrameData.image.length
     this.downloadCountText = '雪碧图' + sheetCount + '张，共' + totalThumbs + '帧'
 
@@ -265,6 +264,42 @@ export default {
         highFrameData.image = highLocalImages
       }
 
+      // 逐帧在线裁切必须使用【原始 CDN 基址 + 原始单帧尺寸】（160×90）。
+      // 此时 lowFrameData.image 已被替换为本地路径（且低画质可能是 120 宽），
+      // 故用 getVideoFramesByAID 预先保留的 originalImages/original* 字段，
+      // 同时写入低/高画质缓存，确保播放页逐帧裁切坐标正确，不出现黑边/缺帧。
+      const originalCropSource = {
+        originalImages: lowFrameData.originalImages || [],
+        originalImgX: lowFrameData.originalImgX || lowFrameData.img_x_size || 160,
+        originalImgY: lowFrameData.originalImgY || lowFrameData.img_y_size || 90,
+        originalCols: lowFrameData.originalCols || fCols,
+        originalRows: lowFrameData.originalRows || fRows
+      }
+      lowFrameData.originalImages = originalCropSource.originalImages
+      lowFrameData.originalImgX = originalCropSource.originalImgX
+      lowFrameData.originalImgY = originalCropSource.originalImgY
+      lowFrameData.originalCols = originalCropSource.originalCols
+      lowFrameData.originalRows = originalCropSource.originalRows
+      highFrameData.originalImages = originalCropSource.originalImages
+      highFrameData.originalImgX = originalCropSource.originalImgX
+      highFrameData.originalImgY = originalCropSource.originalImgY
+      highFrameData.originalCols = originalCropSource.originalCols
+      highFrameData.originalRows = originalCropSource.originalRows
+      // 逐帧列表兜底（同样基于原始在线地址）
+      if (originalCropSource.originalImages.length > 0) {
+        const cropSource = {
+          image: originalCropSource.originalImages,
+          img_x_size: originalCropSource.originalImgX,
+          img_y_size: originalCropSource.originalImgY,
+          img_x_len: originalCropSource.originalCols,
+          img_y_len: originalCropSource.originalRows,
+          total_frames: totalThumbs,
+          index: lowFrameData.index
+        }
+        lowFrameData.frameList = global.biliclient.buildVideoFrameCropList(cropSource)
+        highFrameData.frameList = lowFrameData.frameList
+      }
+
       // 缓存结构：frameData=低画质(查看)，hdFrameData=高画质(逐帧播放)
       // frameCount = 跨所有雪碧图的总帧数，供播放页滑动/逐帧使用，长视频可超过100帧
       const spriteJson = JSON.stringify({
@@ -305,20 +340,7 @@ export default {
   },
   // 雪碧图逐帧播放：跳转播放器（手环内存有限，不附带音频，降低崩溃风险）
   PlaySprite() {
-    if (!this.cachedSpriteId) {
-      prompt.showToast({ message: '无可用雪碧图缓存' })
-      return
-    }
-    router.push({
-      uri: "pages/video/spriteplayer",
-      params: {
-        cachedSpriteId: this.cachedSpriteId,
-        title: this.title,
-        cid: this.cid,
-        aid: this.aid,
-        bvid: this.bvid
-      }
-    })
+    prompt.showToast({ message: '该功能正在开发中' })
   },
   async DeleteSprite() {
     if (!this.cachedSpriteId) return

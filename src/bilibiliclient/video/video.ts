@@ -82,11 +82,13 @@ export const BilibiliClientVideoMethods = {
         const cols = data.img_x_len || data.img_cols || 10;
         const rows = data.img_y_len || data.img_rows || 10;
 
-        // data.index 数组长度 = 整个视频全部有效帧总数（跨所有雪碧图）。
-        // 长视频会返回多张 10×10 雪碧图，必须全部下载，否则只能看到前100帧。
+        // data.index 数组长度 = 整个视频全部有效帧总数 + 1（B站 videoshot 约定：
+        // index[0]=0，index[i] 为第 i-1 帧的起始时间，最后一个元素为结束时间）。
+        // 因此实际有效帧数 = index.length - 1，否则会多裁一帧落在雪碧图空白/越界区，
+        // 表现为黑边/缺帧。
         const gridPerImage = cols * rows;
-        const totalValidFrames = data.index && Array.isArray(data.index)
-            ? data.index.length
+        const totalValidFrames = data.index && Array.isArray(data.index) && data.index.length > 1
+            ? data.index.length - 1
             : data.image.length * gridPerImage;
         // 若调用方显式限制帧数（frameCount>0），则裁剪到该数量；0 表示全部
         const limitedFrames = (frameCount && frameCount > 0 && frameCount < totalValidFrames)
@@ -126,6 +128,12 @@ export const BilibiliClientVideoMethods = {
             data.total_frames = limitedFrames;
             data.image_count = data.image.length;
             data.last_image_rows = neededImages > 1 ? lastImageRows : actualRows;
+            // 未缩放：image[] 本身即原始 CDN 基址，同样保留 original* 供播放页逐帧裁切
+            data.originalImages = data.image.slice();
+            data.originalImgX = imgX;
+            data.originalImgY = imgY;
+            data.originalCols = cols;
+            data.originalRows = rows;
             data.frameList = this.buildVideoFrameCropList(data);
             return data;
         }
@@ -165,6 +173,13 @@ export const BilibiliClientVideoMethods = {
             index: data.index
         };
         data.frameList = this.buildVideoFrameCropList(frameSource);
+        // 保留原始雪碧图基址与原始单帧尺寸，供播放页“逐帧按需构造裁切 URL”，
+        // 避免一次性把数百条 frameList 全部常驻内存。
+        data.originalImages = originalImages;
+        data.originalImgX = imgX;
+        data.originalImgY = imgY;
+        data.originalCols = cols;
+        data.originalRows = rows;
         // 注意：同时更新 img_x_size/img_y_size（B站API原始字段名）和 img_x/img_y（自定义字段名）
         // spriteviewer 读取时优先使用 img_x_size，必须同步更新
         data.img_x = targetSize;
@@ -191,31 +206,54 @@ export const BilibiliClientVideoMethods = {
         const cropW = data.img_x_size || data.img_x || 160;
         const cropH = data.img_y_size || data.img_y || 90;
         const framesPerImage = cols * rows;
-        const totalFrames = data.total_frames
-            || (data.index && Array.isArray(data.index) ? data.index.length : data.image.length * framesPerImage);
+        // 实际有效帧数：优先用 total_frames；否则按 index.length - 1 计算
+        // （index 末尾元素是结束时间，不计为帧，否则会多裁一帧黑/缺画面）。
+        let totalFrames: number;
+        if (data.total_frames && data.total_frames > 0) {
+            totalFrames = data.total_frames;
+        } else if (data.index && Array.isArray(data.index) && data.index.length > 1) {
+            totalFrames = data.index.length - 1;
+        } else {
+            totalFrames = data.image.length * framesPerImage;
+        }
         const list: string[] = [];
         for (let i = 0; i < totalFrames; i++) {
-            const spriteIdx = Math.floor(i / framesPerImage);
-            if (spriteIdx >= data.image.length) break;
-            const posInSheet = i % framesPerImage;
-            const col = posInSheet % cols;
-            const row = Math.floor(posInSheet / cols);
-            const x = col * cropW;
-            const y = row * cropH;
-            let baseUrl = data.image[spriteIdx];
-            // 去掉已有的缩放/裁切后缀（@xxx.jpg），还原为 CDN 原图基址
-            const atIdx = baseUrl.indexOf('@');
-            if (atIdx > 0) baseUrl = baseUrl.substring(0, atIdx);
-            if (!baseUrl.endsWith('.jpg')) {
-                const dotIdx = baseUrl.lastIndexOf('.');
-                if (dotIdx > 0) baseUrl = baseUrl.substring(0, dotIdx) + '.jpg';
-            }
-            // B站 videoshot 接口返回的是协议相对地址（//i0.hdslb.com/...），
-            // 手表 <image> 无法识别无协议地址，必须补全 https: 前缀，否则逐帧全黑。
-            if (baseUrl.indexOf('//') === 0) baseUrl = 'https:' + baseUrl;
-            list.push(baseUrl + '@' + x + '-' + y + '-' + cropW + '-' + cropH + 'a.jpg');
+            const url = this.buildVideoFrameCropUrl(data, i, cols, rows, cropW, cropH, framesPerImage);
+            if (url) list.push(url);
         }
         return list;
+    },
+
+    // 按帧号即时构造“单帧 CDN 裁切地址”。
+    // 供播放页逐帧调用，避免一次性把所有帧 URL（长视频可达数百条）全部构建并常驻内存。
+    // 返回空串表示帧号越界或无可用雪碧图。
+    buildVideoFrameCropUrl(this: any, data: any, frameIndex: number,
+        cols?: number, rows?: number, cropW?: number, cropH?: number, framesPerImage?: number): string {
+        if (!data || !data.image || data.image.length === 0) return '';
+        const c = cols || (data.img_x_len || data.img_cols || 10);
+        const r = rows || (data.img_y_len || data.img_rows || 10);
+        const w = cropW || (data.img_x_size || data.img_x || 160);
+        const h = cropH || (data.img_y_size || data.img_y || 90);
+        const per = framesPerImage || (c * r);
+        const spriteIdx = Math.floor(frameIndex / per);
+        if (spriteIdx >= data.image.length) return '';
+        const posInSheet = frameIndex % per;
+        const col = posInSheet % c;
+        const row = Math.floor(posInSheet / c);
+        const x = col * w;
+        const y = row * h;
+        let baseUrl = data.image[spriteIdx];
+        // 去掉已有的缩放/裁切后缀（@xxx.jpg），还原为 CDN 原图基址
+        const atIdx = baseUrl.indexOf('@');
+        if (atIdx > 0) baseUrl = baseUrl.substring(0, atIdx);
+        if (!baseUrl.endsWith('.jpg')) {
+            const dotIdx = baseUrl.lastIndexOf('.');
+            if (dotIdx > 0) baseUrl = baseUrl.substring(0, dotIdx) + '.jpg';
+        }
+        // B站 videoshot 接口返回的是协议相对地址（//i0.hdslb.com/...），
+        // 手表 <image> 无法识别无协议地址，必须补全 https: 前缀，否则逐帧全黑。
+        if (baseUrl.indexOf('//') === 0) baseUrl = 'https:' + baseUrl;
+        return baseUrl + '@' + x + '-' + y + '-' + w + '-' + h + 'a.jpg';
     },
 
     // 获取视频字幕列表

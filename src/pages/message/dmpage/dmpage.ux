@@ -5,7 +5,10 @@
   <div class="page">
     <image style="position: absolute; margin-top: 233px" if="{{anims.show_loading}}" src="{{anims.loading_src.value}}">
     </image>
-    <scroll class="scroll {{scrclass}}" scroll-y="true" id="mainscroll" bounces="true">
+    <scroll class="scroll {{scrclass}}" scroll-y="true" id="mainscroll" bounces="true"
+      onscrolltop="LoadHistoryMessages">
+      <text class="history-tip" if="{{historyLoading}}">正在加载历史消息...</text>
+      <text class="history-tip" if="{{!historyLoading && noMoreHistory && messages.length > 0}}">没有更多历史消息了</text>
       <div for="{{messages}}">
         <div class="targetmsg-container" if="{{$item.receiver_id == myId}}">
           <div class="targetmsg"
@@ -87,7 +90,13 @@ export default {
       show_loading: false
     },
     input_text: "",
-    scrclass: ""
+    scrclass: "",
+    // 分页加载历史消息：oldestSeqno 为当前列表中最早（最小）一条消息的序列号，
+    // 向上滚动到顶时以它为 end_seqno 拉取更早的消息；historyLoading 防重复请求，
+    // noMoreHistory 标记是否已到历史尽头。
+    historyLoading: false,
+    noMoreHistory: false,
+    oldestSeqno: ""
   },
   async SendMsg() {
     // 发送消息
@@ -165,23 +174,34 @@ export default {
     return msg_seqno === this.messages[this.messages.length - 1].msg_seqno ? "160px" : "0px"
   },
   async UpdateMessages(initial = false) {
-    // 更新消息
+    // 更新消息（轮询最新消息）。始终拉取最新 30 条用于新消息检测，
+    // 若用户正在查看历史消息（messages 已超过 30 条），则只追加其中比当前最新更晚的消息，
+    // 避免把已加载的历史消息冲掉。
     try {
       let response = await global.biliclient.getDMSessionMessage(1, this.targetId, 30)
       if (response.messages) {
         let newMessages = response.messages.reverse()
-
-        if (
-          newMessages.length > 0 &&
-          newMessages[newMessages.length - 1].msg_seqno !==
-            this.messages[this.messages.length - 1].msg_seqno
-        ) {
-          this.messages = newMessages
-          setTimeout(this.ScrollToEnd, 500)
+        if (newMessages.length > 0) {
+          if (initial) {
+            // 首次加载：直接替换占位符，并记录最早一条消息的序列号用于分页
+            this.messages = newMessages
+            this.oldestSeqno = this.MessagesOldestSeqno(newMessages)
+            this.noMoreHistory = newMessages.length < 30
+            setTimeout(this.ScrollToEnd, 500)
+          } else {
+            // 非首次：仅合并序列号更新（比当前最新一条更晚的消息），历史部分保留
+            const latestSeqno = this.MessagesLatestSeqno(this.messages)
+            const incoming = newMessages.filter(m => Number(m.msg_seqno) > Number(latestSeqno))
+            if (incoming.length > 0) {
+              this.messages = this.messages.concat(incoming)
+              // 追加新消息后更新当前最新序列号；oldestSeqno 不变（历史仍以最早一条为游标）
+              setTimeout(this.ScrollToEnd, 500)
+            }
+          }
         }
         newMessages = null
       }
-      
+
       if (initial && this.anims.show_loading) {
         this.anims.show_loading = false
         this.anims.loading.stop()
@@ -193,6 +213,80 @@ export default {
       prompt.showToast({
         message: `更新消息失败！${error.message}`
       })
+    }
+  },
+  // 取消息列表中最早（序列号最小）一条的 msg_seqno，作为向上翻页的 end_seqno
+  MessagesOldestSeqno(list) {
+    if (!list || list.length === 0) return ""
+    let oldest = list[0].msg_seqno
+    for (let i = 1; i < list.length; i++) {
+      if (Number(list[i].msg_seqno) < Number(oldest)) oldest = list[i].msg_seqno
+    }
+    return oldest
+  },
+  // 取消息列表中最新（序列号最大）一条的 msg_seqno
+  MessagesLatestSeqno(list) {
+    if (!list || list.length === 0) return "0"
+    let latest = list[0].msg_seqno
+    for (let i = 1; i < list.length; i++) {
+      if (Number(list[i].msg_seqno) > Number(latest)) latest = list[i].msg_seqno
+    }
+    return latest
+  },
+  // 向上滚动到顶部时加载更早的历史消息（分页）。
+  // 以当前最早一条消息的序列号作为 end_seqno，接口返回该序列号之前的消息。
+  async LoadHistoryMessages() {
+    if (this.historyLoading || this.noMoreHistory) return
+    if (!this.oldestSeqno) return
+    this.historyLoading = true
+    // 记录加载前内容高度，用于在前面插入历史消息后保持可视位置不跳动
+    let prevHeight = 0
+    try {
+      const rect = await new Promise((resolve) => {
+        this.$element("mainscroll").getScrollRect({
+          success: (r) => resolve(r),
+          fail: () => resolve({ height: 0 })
+        })
+      })
+      prevHeight = rect && rect.height ? rect.height : 0
+    } catch (e) {
+      prevHeight = 0
+    }
+    try {
+      const size = 20
+      const response = await global.biliclient.getDMSessionMessage(1, this.targetId, size, this.oldestSeqno)
+      if (response && response.messages && response.messages.length > 0) {
+        // 接口返回的是 end_seqno 之前的消息，顺序为新→旧，需反转成旧→新后拼接到列表头部
+        const older = response.messages.reverse()
+        this.messages = older.concat(this.messages)
+        this.oldestSeqno = this.MessagesOldestSeqno(older)
+        // 返回不足一页，说明历史已到尽头
+        if (older.length < size) this.noMoreHistory = true
+        // 插入历史消息后内容变高，把滚动位置下移到原来的位置，保持可视内容不跳动
+        if (prevHeight > 0) {
+          setTimeout(() => {
+            this.$element("mainscroll").getScrollRect({
+              success: (r) => {
+                const delta = (r && r.height ? r.height : prevHeight) - prevHeight
+                if (delta > 0) this.$element("mainscroll").scrollBy({ top: delta, behavior: "instant" })
+              }
+            })
+          }, 50)
+        }
+        // 提示用户已加载了多少更早的消息
+        prompt.showToast({
+          message: `已加载 ${older.length} 条历史消息`
+        })
+      } else {
+        this.noMoreHistory = true
+      }
+    } catch (error) {
+      global.logger.error("[dmpage] LoadHistoryMessages error: " + (error && error.message ? error.message : error))
+      prompt.showToast({
+        message: "历史消息加载失败"
+      })
+    } finally {
+      this.historyLoading = false
     }
   },
   ScrollToEnd() {

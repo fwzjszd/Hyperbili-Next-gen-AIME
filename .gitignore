@@ -9,3 +9,19 @@
 src/buildinfo.ts
 **/.DS_Store
 *.pem
+
+# 编辑器与系统
+.vscode/
+.idea/
+desktop.ini
+Thumbs.db
+
+# 构建产物与参考 RPK
+*.rpk
+
+# 文档与参考资料（本地保留，不上传）
+/VelaDocs/
+/designs/
+/prototype/
+/cv_result.txt
+/commit_msg.txt

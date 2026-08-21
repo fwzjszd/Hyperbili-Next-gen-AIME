@@ -9,17 +9,19 @@
           <img src="./assets/full/back2.png" style="position: absolute;top:38px;left:38px;width:256px;height:52px;" @click="onBtnClick('switchCn')" show="{{numFlag}}"/>
           <img src="./assets/full/newline.png" style="position: absolute;top:38px;left:310px;width:52px;height:52px;" @click="onBtnClick('newline')" show="{{numFlag}}" />
           <img src="./assets/full/crusor.png" style="position: absolute;top:38px;left:378px;width:52px;height:52px;" @click="onBtnClick('switchCursor')" show="{{numFlag}}" />
-          <img src="./assets/full/123.png" style="position: absolute;top:266px;left:119px;width:120px;height:48px;" @click="onBtnClick('switchNum')" show="{{downFlag==='' && !numFlag && lang==='cn'}}" />
+          <img src="./assets/full/123.png" style="position: absolute;top:266px;left:119px;width:120px;height:48px;" @click="onBtnClick('switchNum')" show="{{downFlag==='' && !numFlag && (lang==='cn' || lang==='jp')}}" />
           <img src="./assets/full/bigA.png" style="position: absolute;top:266px;left:119px;width:120px;height:48px;" @click="onBtnClick('switchLow')" show="{{downFlag==='' && upperFlag && lang==='en' && !cursorFlag}}" />
           <img src="./assets/full/A.png" style="position: absolute;top:266px;left:119px;width:120px;height:48px;" @click="onBtnClick('switchUpper')" show="{{downFlag==='' && !upperFlag && lang==='en' && !cursorFlag}}" />
           <div style="position: absolute;top:38px;left:78px;width:324px;height:52px;background-color:rgb(38,38,38);border-radius: 12px;border: 3px solid #333333" show="{{downFlag===''&& !numFlag}}"></div>
           <img show="{{resultList.length > 0}}" style="position: absolute;top:43px;left:355px;" src="./assets/full/down.png" @click="onBtnClick('down')" />
           <!-- 带变量的相对路径在 aiot-tookit 2.0.4 中修复 -->
-          <img src="./assets/full/{{lang}}.png" style="position: absolute;top:38px;left:7px;width:67px;height:52px;" @click="onBtnClick('lang')" show="{{downFlag==='' && !numFlag}}" />
+          <text class="lang-btn-full" show="{{downFlag==='' && !numFlag && lang==='cn'}}" @click="onBtnClick('lang')">中</text>
+          <text class="lang-btn-full" show="{{downFlag==='' && !numFlag && lang==='en'}}" @click="onBtnClick('lang')">A</text>
+          <text class="lang-btn-full" show="{{downFlag==='' && !numFlag && lang==='jp'}}" @click="onBtnClick('lang')">あ</text>
           <div style="position: absolute;top:-4px;left:78px;width:324px;" show="{{downFlag==='' && !numFlag && cval}}">
             <text class="caltext" style="width:296px;"> {{cval}}_ </text>
           </div>
-          <div style="position: absolute;top:38px;left:80px;width:277px" show="{{lang === 'cn'&& !numFlag}}">
+          <div style="position: absolute;top:38px;left:80px;width:277px" show="{{(lang === 'cn' || lang === 'jp') && !numFlag}}">
             <div class="item column center" for="{{cvalList}}">
               <input show='{{resultList.length > $idx}}' class="calbtn0" type="button" value="{{resultList[$idx]}}" @click="onRsSelect(resultList[$idx])" />
             </div>
@@ -84,20 +86,22 @@
         <!-- 九键 -->
         <div else style="width: 480px;height: 321px;">
           <img src="./assets/t9/back2.png" style="position: absolute;top:35px;left:31px;width: 60px;height: 60px;" @click="onBtnClick('switchCn')" show="{{numFlag}}" />
-          <img src="./assets/t9/123.png" style="position: absolute;top:99px;left:31px;width: 60px;height: 60px;" @click="onBtnClick('switchNum')" show="{{downFlag==='' && !numFlag && lang==='cn'}}" />
+          <img src="./assets/t9/123.png" style="position: absolute;top:99px;left:31px;width: 60px;height: 60px;" @click="onBtnClick('switchNum')" show="{{downFlag==='' && !numFlag && (lang==='cn' || lang==='jp')}}" />
           <img src="./assets/t9/bigA.png" style="position: absolute;top:99px;left:31px;width: 60px;height: 60px;" @click="onBtnClick('switchLow')" show="{{downFlag==='' && !numFlag && upperFlag && lang==='en' && !cursorFlag}}" />
           <img src="./assets/t9/a.png" style="position: absolute;top:99px;left:31px;width: 60px;height: 60px;" @click="onBtnClick('switchUpper')" show="{{downFlag==='' && !numFlag && !upperFlag && lang==='en' && !cursorFlag}}" />
           <div style="position: absolute;top:35px;left:95px;width:290px;height:60px;background-color:rgb(38,38,38);border-radius: 999px;border: 3px solid #333333" show="{{downFlag===''&& !numFlag}}"></div>
           <img show="{{resultList.length > 0}}" style="position: absolute;top:44px;left:338px;" src="./assets/full/down.png" @click="onBtnClick('down')" />
           <!-- 带变量的相对路径在 aiot-tookit 2.0.4 中修复 -->
-          <img src="./assets/t9/{{lang}}.png" style="position: absolute;top:35px;left:31px;width: 60px;height: 60px;" @click="onBtnClick('lang')" show="{{downFlag==='' && !numFlag}}" />
+          <text class="lang-btn-t9" show="{{downFlag==='' && !numFlag && lang==='cn'}}" @click="onBtnClick('lang')">中</text>
+          <text class="lang-btn-t9" show="{{downFlag==='' && !numFlag && lang==='en'}}" @click="onBtnClick('lang')">A</text>
+          <text class="lang-btn-t9" show="{{downFlag==='' && !numFlag && lang==='jp'}}" @click="onBtnClick('lang')">あ</text>
           <div style="position: absolute;top:-4px;left:95px;width:145px;height:40px;" show="{{downFlag==='' && !numFlag && cval}}">
             <text class="caltext" style="width:145px;"> {{cval}}_ </text>
           </div>
           <div show="{{downFlag==='' && !numFlag}}" style="position: absolute;top:-4px;left:240px;width:145px;height:40px;justify-content:flex-end">
             <text for="{{waitingList}}" class="waiting-keys" style="color:{{$idx===waitingIndex ? 'rgb(13,132,255)' : 'white'}};" @click="onSelectWaiting($idx)">{{waitingList[$idx]}}</text>
           </div>
-          <div style="position: absolute;top:39px;left:105px;width:233px" show="{{lang === 'cn'&& !numFlag}}">
+          <div style="position: absolute;top:39px;left:105px;width:233px" show="{{(lang === 'cn' || lang === 'jp') && !numFlag}}">
             <div class="item column center" for="{{cvalList}}">
               <input show='{{resultList.length > $idx}}' class="calbtn0" type="button" value="{{resultList[$idx]}}" @click="onRsSelect(resultList[$idx])" />
             </div>
@@ -221,8 +225,9 @@
           </scroll>
         </div>
         <div style="width: 100%; flex-direction: row; justify-content: center; top:6px; padding:0 6px;">
-          <img src="./assets/horizontal/cn.png" style="padding: 6px;width: 60px;height: 60px;" @click="onBtnClick('lang')" if="{{downFlag==='' && !numFlag && lang==='cn'}}" />
-          <div if="{{lang === 'cn' && !numFlag}}" style="margin-left: 6px;flex: 1;height: 60px;background-color:#262626;border-color: #333333; border-width: 3px; border-radius: 100px;flex-direction: row;align-items:center">
+          <text class="lang-btn-rect" if="{{downFlag==='' && !numFlag && lang==='cn'}}" @click="onBtnClick('lang')">中</text>
+          <text class="lang-btn-rect" if="{{downFlag==='' && !numFlag && lang==='jp'}}" @click="onBtnClick('lang')">あ</text>
+          <div if="{{(lang === 'cn' || lang === 'jp') && !numFlag}}" style="margin-left: 6px;flex: 1;height: 60px;background-color:#262626;border-color: #333333; border-width: 3px; border-radius: 100px;flex-direction: row;align-items:center">
             <scroll id="cvalWaiting" scroll-x="{{true}}" style="position:absolute;width: 85%;height: 42px;">
               <div static style="position: absolute;left: 0px;height: 42px;padding-left:20px;padding-right:20px">
                 <text class="calbtn02" style="padding-right:10px" @click="pushCval">{{cval}}</text>
@@ -307,9 +312,11 @@
           </scroll>
           <img show="{{resultList.length > 0}}" style="position: absolute;left: 120px;top: 57px;width: 60px;height: 40px;" src="./assets/arc/down2.png" @click="onBtnClick('down')" />
           <!-- 带变量的相对路径在 aiot-tookit 2.0.4 中修复 -->
-          <img src="./assets/arc/{{lang}}.png" style="position: absolute;top:0px;left:9px;width: 48px;height: 42px;" @click="onBtnClick('lang')" show="{{downFlag==='' && !numFlag}}" />
-          <img src="./assets/arc/back2.png" style="position: absolute;top:0px;left:9px;width: 48px;height: 42px;" @click="onBtnClick('switchCn')" show="{{numFlag && lang==='cn'}}" />
-          <img src="./assets/arc/123.png" style="position: absolute;left: 70px;top: 0px;width: 52px;height: 42px;" @click="onBtnClick('switchNum')" show="{{downFlag==='' && !numFlag && lang==='cn'}}" />
+          <text class="lang-btn-arc" show="{{downFlag==='' && !numFlag && lang==='cn'}}" @click="onBtnClick('lang')">中</text>
+          <text class="lang-btn-arc" show="{{downFlag==='' && !numFlag && lang==='en'}}" @click="onBtnClick('lang')">A</text>
+          <text class="lang-btn-arc" show="{{downFlag==='' && !numFlag && lang==='jp'}}" @click="onBtnClick('lang')">あ</text>
+          <img src="./assets/arc/back2.png" style="position: absolute;top:0px;left:9px;width: 48px;height: 42px;" @click="onBtnClick('switchCn')" show="{{numFlag && (lang==='cn' || lang==='jp')}}" />
+          <img src="./assets/arc/123.png" style="position: absolute;left: 70px;top: 0px;width: 52px;height: 42px;" @click="onBtnClick('switchNum')" show="{{downFlag==='' && !numFlag && (lang==='cn' || lang==='jp')}}" />
           <img src="./assets/full/crusor.png" style="position: absolute;left: 70px;top: 0px;width: 48px;height: 42px;" @click="onBtnClick('switchCursor')" show="{{numFlag && !cursorFlag}}" />
           <img src="./assets/arc/bigA.png" style="position: absolute;top:0px;left:72px;width:48px;height:42px;" @click="onBtnClick('switchLow')" show="{{downFlag==='' && upperFlag && lang==='en'}}" />
           <img src="./assets/arc/a.png" style="position: absolute;top:0px;left:72px;width:48px;height:42px;" @click="onBtnClick('switchUpper')" show="{{downFlag==='' && !upperFlag && lang==='en'}}" />
@@ -337,10 +344,19 @@
 import vibrator from "@system.vibrator";
 import device from '@system.device'
 import { SimpleInputMethod } from "./assets/dicUtil.js";
+import { RomajiInputMethod } from "./assets/dicJp.js";
 function doSearchDic(word, cb) {
   let hanzi = SimpleInputMethod.getHanzi(word);
   if (hanzi && hanzi[0]) {
     cb(hanzi[0]);
+  } else {
+    cb([]);
+  }
+}
+function doSearchJp(word, cb) {
+  let kana = RomajiInputMethod.getKana(word);
+  if (kana && RomajiInputMethod.hasKana(word)) {
+    cb([kana]);
   } else {
     cb([]);
   }
@@ -456,6 +472,8 @@ export default {
       case "lang":
         if (this.lang === "cn") {
           this.lang = "en";
+        } else if (this.lang === "en") {
+          this.lang = "jp";
         } else {
           this.lang = "cn";
         }
@@ -482,8 +500,8 @@ export default {
         break;
       case "select":
         if (this.lastWaitingStr != sign && this.lastWaitingStr) {
-          if (this.lang === "cn") {
-            this.cval += this.waitingList[this.waitingIndex];
+          if (this.lang === "cn" || this.lang === "jp") {
+            this.cval += this.waitingList[this.waitingIndex].toLowerCase();
           } else {
             if (this.upperFlag) {
               this.addAllTxt(this.waitingList[this.waitingIndex].toUpperCase());
@@ -522,15 +540,15 @@ export default {
           this.addAllTxt(sign);
         } else {
           if (this.waitingIndex >= 0) {
-            if (this.lastWaitingStr === sign) {
-              this.waitingIndex++;
-              if (this.waitingIndex >= this.lastWaitingStr.length) {
-                this.waitingIndex = 0;
-              }
+          if (this.lastWaitingStr === sign) {
+            this.waitingIndex++;
+            if (this.waitingIndex >= this.lastWaitingStr.length) {
+              this.waitingIndex = 0;
+            }
+          } else {
+            if (this.lang === "cn" || this.lang === "jp") {
+              this.cval += this.waitingList[this.waitingIndex].toLowerCase();
             } else {
-              if (this.lang === "cn") {
-                this.cval += this.waitingList[this.waitingIndex];
-              } else {
                 if (this.upperFlag) {
                   this.addAllTxt(
                     this.waitingList[this.waitingIndex].toUpperCase(),
@@ -572,9 +590,13 @@ export default {
     if (this.lastWaitingStr && this.lastWaitingStr[this.waitingIndex]) {
       watingStr = this.lastWaitingStr[this.waitingIndex];
     }
-    if (!(this.cval + watingStr) || this.lang != "cn") {
+    if (!(this.cval + watingStr) || (this.lang != "cn" && this.lang != "jp")) {
       this.resultList = [];
       this.setResultListAll();
+      return;
+    }
+    if (this.lang === "jp") {
+      this.getResultByWordJp(this.cval + watingStr);
       return;
     }
     this.getResultByWord(this.cval + watingStr);
@@ -600,6 +622,13 @@ export default {
       that.setResultListAll();
     });
   },
+  getResultByWordJp(val) {
+    const that = this;
+    doSearchJp(val, function (data) {
+      that.resultList = data;
+      that.setResultListAll();
+    });
+  },
   onSelect(num) {
     this.$emit("keyDown", { content: num });
     if (this.keyboardtype === "T9" && this.screentype !== "pill-shaped") {
@@ -607,7 +636,7 @@ export default {
       return;
     }
     this.onVibrate();
-    if (this.lang === "cn" && !this.numFlag) {
+    if ((this.lang === "cn" || this.lang === "jp") && !this.numFlag) {
       this.cval += num.toLowerCase();
     } else if (this.lang === "en" && !this.numFlag) {
       if (this.upperFlag) {
@@ -622,8 +651,8 @@ export default {
   },
   onSelectWaiting(num) {
     this.onVibrate();
-    if (this.lang === "cn") {
-      this.cval += this.waitingList[num].toString();
+    if (this.lang === "cn" || this.lang === "jp") {
+      this.cval += this.waitingList[num].toString().toLowerCase();
     } else {
       if (this.upperFlag) {
         this.addAllTxt(this.waitingList[num].toUpperCase());
@@ -663,7 +692,11 @@ export default {
     this.cval = "";
     this.clearWaiting();
     this.resetReslutList();
-    this.addAllTxt(temp);
+    if (this.lang === "jp") {
+      this.addAllTxt(RomajiInputMethod.getKana(temp));
+    } else {
+      this.addAllTxt(temp);
+    }
   },
   adjustScreenWidth(){
     device.getInfo({
@@ -874,10 +907,71 @@ export default {
   width: 100%;
 }
 
-.calbtnt9-rect { 
+.calbtnt9-rect {
   flex:1;
   height: 55px;
   margin: 0 3px;
   width: unset;
+}
+
+/* 语言按钮文本（替代图片，支持中/A/あ 三态切换）
+   样式与周围键盘按钮保持一致：calbtnfull用12px圆角+微透明边框，
+   calbtnt9用999px圆角，calbtn67/66用30px圆角 */
+.lang-btn-full {
+  position: absolute;
+  top: 38px;
+  left: 7px;
+  width: 67px;
+  height: 52px;
+  color: #fff;
+  font-size: 28px;
+  font-weight: bold;
+  text-align: center;
+  background-color: #262626;
+  border-radius: 12px;
+  border: 3px solid rgba(255,255,255,0.06);
+}
+
+.lang-btn-t9 {
+  position: absolute;
+  top: 35px;
+  left: 31px;
+  width: 60px;
+  height: 60px;
+  color: #fff;
+  font-size: 28px;
+  font-weight: bold;
+  text-align: center;
+  background-color: #262626;
+  border-radius: 999px;
+  border: 3px solid rgba(255,255,255,0.06);
+}
+
+.lang-btn-rect {
+  padding: 6px;
+  width: 60px;
+  height: 60px;
+  color: #fff;
+  font-size: 28px;
+  font-weight: bold;
+  text-align: center;
+  background-color: rgb(38,38,38);
+  border-radius: 30px;
+  border: 3px solid rgba(255,255,255,0.06);
+}
+
+.lang-btn-arc {
+  position: absolute;
+  top: 0px;
+  left: 9px;
+  width: 48px;
+  height: 42px;
+  color: #fff;
+  font-size: 24px;
+  font-weight: bold;
+  text-align: center;
+  background-color: rgb(38,38,38);
+  border-radius: 30px;
+  border: 3px solid rgba(255,255,255,0.06);
 }
 </style>
