@@ -41,7 +41,7 @@
 | 构建工具 | `@aiot-toolkit/cli` + webpack |
 | 字节码 | `aiotjsc` 编译为 JSC 字节码（`--enable-jsc`） |
 | 协议 | Protobuf JSON（`--enable-protobuf`） |
-| UI 套件 | 项目自研 **ResonaUI**（页面过渡动画、通用 CSS 类、键盘辅助） |
+| UI 套件 | 开源项目 **ResonaUI**（页面过渡动画、通用 CSS 类、键盘辅助） |
 | 包管理 | **Yarn 1**（`postinstall` 强制校验） |
 
 ---
