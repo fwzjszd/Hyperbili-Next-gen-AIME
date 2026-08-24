@@ -140,8 +140,8 @@ HyperBilibili/
 
 ## 🏗 机型脚本
 
-`scripts/` 下为特定机型（Redmi 手表 S3/S4、Redmi Watch 5 Active 等）打包/裁剪脚本，按需调用：
-- `build_s3s4.py`：S3/S4 机型
+`scripts/` 下为特定机型（Xiaomi Watch S3/S4、Redmi Watch 5等）打包/裁剪脚本，按需调用：
+- `build_s3s4.py`：Xiaomi Watch S3/S4 机型
 - `build_rw5.py`：Redmi Watch 5 系列
 
 
@@ -167,7 +167,7 @@ HyperBilibili/
    - 帧数按 `index.length - 1` 计算（B站 `index[]` 长度=帧数+1），彻底修复黑边/越界裁切
    - 保留并传递 `originalImages / originalImgX/Y/Cols/Rows` 作为裁切基准，避免低画质本地化后坐标错位
    - `spriteplayer.ux`：画面固定 336×189（16:9）+ 无 `object-fit`，消除缩放偏移；移除损坏的背景图；弹幕改为单 50ms 计时器并节流释放；帧基准间隔对齐补丁版 700ms
-   - `videocontent.ux`：**播放入口「雪碧图预览 / 播放」按钮目前改为 toast「该功能正在开发中」**，防止手表侧内存不足重启
+   - `videocontent.ux`：**播放入口「雪碧图预览 / 播放」按钮目前改为 toast「该功能正在开发中」**，防止错误进入手表侧内存不足重启
 
 4. **项目清理**
    - 从源码中移除非编译必需目录：`VelaDocs/`（官方文档可在线查阅）、`designs/`、`prototype/`
