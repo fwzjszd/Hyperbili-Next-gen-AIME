@@ -16,7 +16,7 @@ import { BilibiliClientDanmakuMethods } from './danmaku/danmaku';
 
 class BilibiliClient {
     // 版本号
-    public version: string = "2.5.3";
+    public version: string = "2.5.4";
 
     // Fetch API
     // 在class内存储一个来适配不同实现

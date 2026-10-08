@@ -73,6 +73,28 @@ export const BilibiliClientAPIRequestMethods = {
         return this.getRequest(`${url}?${signedParams}`);
     },
 
+    // 发送带Wbi签名的GET请求，支持覆盖/追加自定义请求头
+    // 返回 { body: response.data, finalUrl }，便于业务层在失败时排查实际发出的URL与参数
+    async getRequestWbiWithHeaders(this: any, url: string, params: any, headers: Record<string, string>): Promise<any> {
+        const img_key = this.accountInfo.wbi_img.img_url.split('/').pop().split('.')[0];
+        const sub_key = this.accountInfo.wbi_img.sub_url.split('/').pop().split('.')[0];
+        const signedParams = this.encWbi(params, img_key, sub_key);
+        const finalUrl = `${url}?${signedParams}`;
+        global.logger.log("getRequestWbiWithHeaders: " + finalUrl);
+        try {
+            const response = await this.fetch.fetch({
+                url: finalUrl,
+                responseType: "json",
+                header: { ...this.getHeaders(), ...headers }
+            });
+            return { body: response.data, finalUrl };
+        } catch (error) {
+            global.logger.error(`GET请求失败，详细数据：`, error);
+        }
+
+        return { body: void 0, finalUrl };
+    },
+
     // 发送POST请求
     async postRequest(this: any, url: string, data: string, content_type: string, custom_headers: any = null): Promise<any> {
         global.logger.log(`postRequest: ${url}, body: ${data}, contentType: ${content_type}`);

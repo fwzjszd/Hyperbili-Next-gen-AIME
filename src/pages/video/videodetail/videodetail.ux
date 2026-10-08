@@ -334,17 +334,91 @@ export default {
       message: "由于B站风控，该功能暂不可用"
     })
   },
+  formatDurationSeconds(sec) {
+    const s = Math.max(0, parseInt(sec, 10) || 0)
+    const m = Math.floor(s / 60)
+    const r = s % 60
+    return `${m}:${r.toString().padStart(2, '0')}`
+  },
+  buildAIConclusionText(result) {
+    if (!result || !result.available) return ""
+    let block = result.summary || ""
+    const outline = result.outline || []
+    if (outline.length > 0) {
+      block += "\n\n章节大纲："
+      for (let i = 0; i < outline.length; i++) {
+        const ch = outline[i] || {}
+        block += `\n${this.formatDurationSeconds(ch.timestamp)} ${ch.title || ''}`
+        const parts = ch.part_outline
+        if (Array.isArray(parts)) {
+          for (let j = 0; j < parts.length; j++) {
+            const p = parts[j] || {}
+            block += `\n  ${this.formatDurationSeconds(p.timestamp)} ${p.content || ''}`
+          }
+        }
+      }
+    }
+    return block
+  },
+  buildAINoSummaryMessage(result) {
+    const d = (result && result.diag) ? result.diag : null
+    const stage = d ? d.stage : ""
+    if (stage === "processing") {
+      return "AI视频总结生成中，请稍后再试"
+    }
+    if (stage === "nospeech") {
+      return "该视频没有可识别的语音，无法生成AI总结"
+    }
+    if (stage === "unsupported") {
+      return "该视频暂不支持AI总结，可能包含敏感内容"
+    }
+    if (stage === "empty") {
+      return "该视频的AI总结内容为空"
+    }
+    if (stage === "network") {
+      return "获取AI总结失败，网络异常或请求被拦截"
+    }
+    if (stage === "parse" || stage === "outer") {
+      return "获取AI总结失败，返回数据异常"
+    }
+    return "该视频没有AI总结"
+  },
+  formatAIDiag(result) {
+    const d = (result && result.diag) ? result.diag : null
+    if (!d) return "\n[诊断] 无返回信息"
+    let line = `\n[诊断] stage=${d.stage}`
+    if (d.outerCode !== null && d.outerCode !== undefined) line += ` outer=${d.outerCode}`
+    if (d.innerCode !== null && d.innerCode !== undefined) line += ` inner=${d.innerCode}`
+    if (d.stid !== null && d.stid !== undefined) line += ` stid="${d.stid}"`
+    if (d.status !== null && d.status !== undefined) line += ` status=${d.status}`
+    const msg = d.innerMsg || d.outerMsg
+    if (msg) line += ` msg=${msg}`
+    if (d.paramInfo) line += `\n参数：${d.paramInfo}`
+    if (d.finalUrl) line += `\n完整URL：${d.finalUrl}`
+    if (d.rawPreview) line += `\n原始返回：${d.rawPreview}`
+    return line
+  },
   async AISummary() {
-    const summary =
-      (await global.biliclient.getVideoAISummaryByBVID(
+    try {
+      const result = await global.biliclient.getVideoAISummaryByBVID(
         this.vid.bvid,
         this.vid.cid,
         this.vid.owner.mid
-      )) || "该视频没有摘要，可能是其内容中包含敏感信息或没有可识别的音频"
-    router.push({
-      uri: "pages/tools/textdetail",
-      params: {text: summary}
-    })
+      )
+      const text =
+        this.buildAIConclusionText(result) ||
+        (this.buildAINoSummaryMessage(result) + this.formatAIDiag(result))
+      router.push({
+        uri: "pages/tools/textdetail",
+        params: {text: text}
+      })
+    } catch (e) {
+      global.logger.log("获取AI总结出错：" + e.toString())
+      router.push({
+        uri: "pages/tools/textdetail",
+        params: {text: "获取AI总结失败\n[诊断] stage=exception msg=" + e.toString()}
+      })
+    }
   },
   ShowVideoIntro() {
     try {
@@ -394,19 +468,20 @@ export default {
       
       // 获取AI总结
       try {
-        const summary = await global.biliclient.getVideoAISummaryByBVID(
+        const result = await global.biliclient.getVideoAISummaryByBVID(
           this.vid.bvid,
           this.vid.cid,
           this.vid.owner.mid
         )
-        if (summary) {
-          detailText += `\n【AI视频总结】\n${summary}`
+        const conclusion = this.buildAIConclusionText(result)
+        if (conclusion) {
+          detailText += `\n【AI视频总结】\n${conclusion}`
         } else {
-          detailText += `\n【AI视频总结】\n该视频没有摘要，可能是其内容中包含敏感信息或没有可识别的音频`
+          detailText += `\n【AI视频总结】\n${this.buildAINoSummaryMessage(result)}${this.formatAIDiag(result)}`
         }
       } catch (e) {
         global.logger.log("获取AI总结出错：" + e.toString())
-        detailText += `\n【AI视频总结】\n获取失败，请稍后再试`
+        detailText += `\n【AI视频总结】\n获取失败，请稍后再试\n[诊断] stage=exception msg=${e.toString()}`
       }
       
       router.push({

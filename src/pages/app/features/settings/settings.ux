@@ -4,7 +4,13 @@
   <div class="page">
     <scroll class="scroll {{scrclass}}" scroll-y="true" bounces="true">
       <switch-bar title="settings.title"></switch-bar>
-      <img src="/common/settings_version.png" @click="GoAbout"></img>
+      <div class="version-banner" @click="GoAbout">
+        <image class="version-banner-bg" src="/common/settings_version.png"></image>
+        <div class="version-banner-text">
+          <text class="version-banner-title">Hyperbili Next</text>
+          <text class="version-banner-sub">版本：v{{bannerVersion}} next-gen AIME</text>
+        </div>
+      </div>
       <div class="setbase" onclick="ClickCountSet('fresh_type')">
         <image class="seticon" src="/common/settings_freshtype.png"></image>
         <text class="setext_small">{{ $t("settings.videoPushRelevance") }}</text>
@@ -71,6 +77,7 @@ export default {
     home_vid_count: 10,
     keepScreenOn: 0,
     startupPage: "主页",
+    bannerVersion: "",
     countset: {
       fresh_type_max: 3,
       fresh_type_min: 1,
@@ -183,6 +190,7 @@ export default {
     this.startupPage = global.settings.SETTINGS.startupPage
   },
   onInit() {
+    this.bannerVersion = global.biliclient.version
     this.UpdateNumView()
   },
   onShow() {

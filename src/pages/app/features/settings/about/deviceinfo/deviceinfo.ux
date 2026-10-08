@@ -29,6 +29,14 @@
         </div>
       </div>
 
+      <div class="info-card" if="{{!loadingFailed}}">
+        <text class="info-title">网络</text>
+        <div class="info-row">
+          <text class="info-label">当前联网方式</text>
+          <text class="info-value">{{networkType}}</text>
+        </div>
+      </div>
+
       <text class="loading-text" if="{{loadingFailed}}">设备信息获取失败</text>
       <text style="margin-top: 20px"></text>
     </scroll>
@@ -37,6 +45,7 @@
 
 <script>
 import device from "@system.device"
+import network from "@system.network"
 
 export default {
   private: {
@@ -45,6 +54,7 @@ export default {
     storageTotal: '加载中...',
     storageAvailable: '加载中...',
     storageUsed: '加载中...',
+    networkType: '加载中...',
     loadingFailed: false
   },
   onInit() {
@@ -116,6 +126,16 @@ export default {
       fail: function() {}
     })
 
+    // 获取当前联网方式
+    network.getType({
+      success: function(ret) {
+        self.networkType = self.mapNetworkType(ret.type)
+      },
+      fail: function() {
+        self.networkType = '获取失败'
+      }
+    })
+
     // Vela 中 device API 可能同步执行，延迟赋值确保 VM 已就绪
     setTimeout(function() {
       self.basicInfo = infoItems
@@ -143,6 +163,21 @@ export default {
       return (mb / 1024).toFixed(2) + ' GB'
     }
     return mb.toFixed(2) + ' MB'
+  },
+  mapNetworkType(type) {
+    var map = {
+      'wifi': 'Wi-Fi',
+      '4g': '4G',
+      '3g': '3G',
+      '2g': '2G',
+      '5g': '5G',
+      'bluetooth': '蓝牙',
+      'ble': '蓝牙',
+      'none': '未联网',
+      'other': '其他'
+    }
+    var key = type ? ('' + type).toLowerCase() : ''
+    return map[key] || (type ? '' + type : '未知')
   }
 }
 </script>

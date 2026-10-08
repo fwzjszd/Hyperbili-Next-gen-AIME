@@ -50,7 +50,6 @@ export default {
       global.logger.log(get_result)
       this.show_qr = true
       this.anims.show_loading = false
-
       this.qrpoll_interval = setInterval(() => this.PollQR(), 1500)
     } catch (error) {
       global.logger.error("获取QR码时出错:", error)
@@ -59,7 +58,7 @@ export default {
     }
   },
   onReady() {
-    const {pagediv_mgt, loading_img_src} = this.anims
+    const {pagediv_mgt} = this.anims
 
     this.anims.pagediv = new global.animengine.DomAnim(
       "loginPage",
@@ -69,12 +68,16 @@ export default {
       0,
       250
     )
-    if (this.anims.pagediv) this.anims.pagediv.start()
+    this.anims.pagediv.start()
 
     global.animengine.defaults.loading.CreateLoadingAnimation(this, false)
     this.anims.loading.start()
 
     this.GetQR()
+  },
+  onDestroy() {
+    if (this.qrpoll_interval) clearInterval(this.qrpoll_interval)
+    global.animengine.clearPageAnims("loginPage")
   }
 }
 </script>

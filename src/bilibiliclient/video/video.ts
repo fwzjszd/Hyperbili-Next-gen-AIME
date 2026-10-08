@@ -13,6 +13,98 @@ export const BilibiliClientVideoMethods = {
         return response.data.data;
     },
 
+    // 在线直取 videoshot 雪碧图数据。严格对齐真机已验证可行的 WristBili loadVideoShot：
+    // bvid+cid、index=1 固定，且【不带任何 header】（无 Cookie/UA/Referer）裸请求，
+    // 使用 success/fail 回调（而非 Promise）以最大化设备兼容性。帧数按 index.length-1 固化。
+    async getVideoShotByBvidCid(this: any, bvid: string, cid: string): Promise<any> {
+        const url = `https://api.bilibili.com/x/player/videoshot?bvid=${bvid}&cid=${cid}&index=1`;
+        global.logger.log("[getVideoShotByBvidCid] bare fetch: " + url);
+
+        if (!bvid) return { ok: false, error: 'bvid为空' };
+        if (!cid) return { ok: false, error: 'cid为空' };
+
+        const rawResult: any = await new Promise((resolve) => {
+            this.fetch.fetch({
+                url: url,
+                responseType: 'json',
+                success: function (res: any) { resolve({ ok: true, res: res }); },
+                fail: function (err: any) { resolve({ ok: false, err: err }); }
+            });
+        });
+
+        if (!rawResult.ok) {
+            const errMsg = rawResult.err ? (rawResult.err.errMsg || rawResult.err.statusCode || JSON.stringify(rawResult.err)) : '未知错误';
+            global.logger.error("[getVideoShotByBvidCid] fetch fail: " + errMsg);
+            return { ok: false, error: '网络请求失败: ' + errMsg };
+        }
+
+        const res = rawResult.res;
+        const tryParse = (v: any): any => {
+            if (typeof v === 'string') {
+                try { return JSON.parse(v); } catch (e) { return v; }
+            }
+            return v;
+        };
+
+        const rawData = res ? res.data : res;
+        let rawStr = '';
+        if (typeof rawData === 'string') rawStr = rawData;
+        else { try { rawStr = JSON.stringify(rawData); } catch (e) { rawStr = String(rawData); } }
+        global.logger.log("[getVideoShotByBvidCid] raw data (first 800): " + rawStr.substring(0, 800));
+
+        let body: any = tryParse(rawData);
+        if (body && typeof body === 'object' && !Array.isArray(body) && body.code === undefined && body.data) {
+            const inner = tryParse(body.data);
+            if (inner && typeof inner === 'object' && inner.code !== undefined) body = inner;
+        }
+
+        if (!body || typeof body !== 'object') return { ok: false, error: '响应解析失败' };
+        if (body.code !== 0) return { ok: false, error: '接口返回code=' + body.code + ' msg=' + (body.message || '') };
+        if (!body.data) return { ok: false, error: '接口返回无data字段' };
+
+        const data = body.data;
+        if (!data.image || !Array.isArray(data.image) || data.image.length === 0) {
+            return { ok: false, error: '该视频无雪碧图(image为空)' };
+        }
+
+        const cols = data.img_x_len || 10;
+        const rows = data.img_y_len || 10;
+        const cropW = data.img_x_size || 160;
+        const cropH = data.img_y_size || 90;
+        const indexArr = Array.isArray(data.index) ? data.index : [];
+
+        const urls: string[] = [];
+        for (let i = 0; i < data.image.length; i++) {
+            let u = data.image[i];
+            if (u && u.indexOf('//') === 0) u = 'https:' + u;
+            if (u && u.indexOf('http') === 0) urls.push(u);
+        }
+        if (urls.length === 0) return { ok: false, error: '雪碧图URL无效' };
+
+        const framesPerSprite = cols * rows;
+        const totalCapacity = framesPerSprite * urls.length;
+        let frameCount = 0;
+        if (indexArr.length > 1) {
+            frameCount = indexArr.length - 1;
+        } else if (totalCapacity > 0) {
+            frameCount = (urls.length - 1) * framesPerSprite + cols;
+            if (frameCount > totalCapacity) frameCount = totalCapacity;
+        }
+
+        return {
+            ok: true,
+            data: {
+                image: urls,
+                index: indexArr,
+                img_x_len: cols,
+                img_y_len: rows,
+                img_x_size: cropW,
+                img_y_size: cropH,
+                total_frames: frameCount
+            }
+        };
+    },
+
     // 判断视频是否被点赞
     async isVideoLikedByBVID(this: any, bvid: string): Promise<boolean> {
         const url = `https://api.bilibili.com/x/web-interface/archive/has/like?bvid=${bvid}`;
@@ -34,11 +126,109 @@ export const BilibiliClientVideoMethods = {
         return response.data.data.favoured;
     },
 
-    // 获取视频AI摘要
-    async getVideoAISummaryByBVID(this: any, bvid: string, cid: string, up_mid: string) {
+    // 获取视频AI摘要（B站官方 conclusion/get，wbi签名）
+    // 返回 { available, code, summary, outline, diag }，diag 用于在无内容时展示排查信息
+    async getVideoAISummaryByBVID(this: any, bvid: string, cid: string | number, up_mid: string | number = 0) {
+        const normBvid = bvid ? String(bvid) : "";
+        const normCid = parseInt(cid as string, 10) || 0;
+        const normMid = parseInt(up_mid as string, 10) || 0;
+        const paramInfo = `bvid=${normBvid}(${typeof normBvid}) cid=${normCid}(${typeof normCid}) up_mid=${normMid}(${typeof normMid})`;
+
         const url = "https://api.bilibili.com/x/web-interface/view/conclusion/get";
-        const response = await this.getRequestWbi(url, { bvid, cid, up_mid });
-        return response.data.data.model_result.summary;
+        const headers = { 'Referer': 'https://www.bilibili.com/' };
+        const resp: any = await this.getRequestWbiWithHeaders(
+            url,
+            { web_location: '333.788', bvid: normBvid, cid: normCid, up_mid: normMid },
+            headers
+        );
+        const raw = resp ? resp.body : resp;
+        const finalUrl = resp ? resp.finalUrl : "";
+
+        const tryParse = (v: any): any => {
+            if (typeof v === 'string') {
+                try { return JSON.parse(v); } catch (e) { return v; }
+            }
+            return v;
+        };
+
+        let rawPreview = "";
+        try { rawPreview = (typeof raw === 'string' ? raw : JSON.stringify(raw)).substring(0, 200); } catch (e) { rawPreview = String(raw).substring(0, 200); }
+
+        if (!raw || raw === "") {
+            return {
+                available: false, code: -999, summary: "", outline: [],
+                diag: { stage: "network", outerCode: -999, innerCode: null, outerMsg: "请求无返回(网络失败或被拦截)", rawPreview, finalUrl, paramInfo }
+            };
+        }
+
+        const wrapper: any = tryParse(raw);
+        let body: any = wrapper;
+        let unwrapped = false;
+        if (body && typeof body === 'object' && !Array.isArray(body) && body.data && typeof body.data === 'object'
+            && body.message === undefined
+            && (body.code === undefined || String(body.code) === '200')) {
+            const inner = tryParse(body.data);
+            if (inner && typeof inner === 'object' && inner.code !== undefined && inner.message !== undefined) {
+                body = inner;
+                unwrapped = true;
+            }
+        }
+
+        global.logger.log(`[getVideoAISummaryByBVID] unwrapped=${unwrapped} bodyType=${typeof body} ${paramInfo}`);
+
+        if (!body || typeof body !== 'object' || Array.isArray(body)) {
+            return {
+                available: false, code: -998, summary: "", outline: [],
+                diag: { stage: "parse", outerCode: -998, innerCode: null, outerMsg: "响应不是有效JSON对象", rawPreview, finalUrl, paramInfo }
+            };
+        }
+
+        const outerCode = body.code;
+        const outerMsg = body.message || body.msg || "";
+        const data = body.data;
+        if (outerCode !== 0 || !data) {
+            return {
+                available: false, code: outerCode, summary: "", outline: [],
+                diag: { stage: "outer", outerCode, innerCode: null, outerMsg, rawPreview, finalUrl, paramInfo }
+            };
+        }
+
+        const innerCode = data.code;
+        const innerMsg = data.message || data.msg || "";
+        const stid = data.stid !== undefined && data.stid !== null ? String(data.stid) : "";
+        const status = data.status !== undefined && data.status !== null ? data.status : null;
+        const model = data.model_result;
+        if (innerCode !== 0 || !model) {
+            let stage = "inner";
+            if (innerCode === 1) {
+                stage = stid === "0" ? "processing" : "nospeech";
+            } else if (innerCode === -1) {
+                stage = "unsupported";
+            }
+            return {
+                available: false, code: innerCode, summary: "", outline: [], stid, status,
+                diag: { stage, outerCode, innerCode, outerMsg, innerMsg, stid, status, rawPreview, finalUrl, paramInfo }
+            };
+        }
+
+        const summary = model.summary || "";
+        const outline = Array.isArray(model.outline) ? model.outline : [];
+        if (!summary && outline.length === 0) {
+            return {
+                available: false, code: 0, summary: "", outline: [], stid, status,
+                diag: { stage: "empty", outerCode, innerCode, outerMsg, innerMsg, stid, status, rawPreview, finalUrl, paramInfo }
+            };
+        }
+
+        return {
+            available: true,
+            code: 0,
+            summary,
+            outline,
+            stid,
+            status,
+            diag: { stage: "ok", outerCode, innerCode, outerMsg, innerMsg, stid, status, rawPreview, finalUrl, paramInfo }
+        };
     },
 
     // 获取根据BVID与CID获取视频MP4流地址
@@ -56,13 +246,7 @@ export const BilibiliClientVideoMethods = {
         return response.data.data;
     },
 
-    // 获取视频帧信息（视频缩略图/雪碧图）
-    // 参数 frameCount: 用户期望的帧数，用于计算合适的 API index 参数
-    //   frameCount >= 45 → index=1 (约100帧，单帧最小)
-    //   frameCount >= 24 → index=2 (约50帧)
-    //   frameCount >= 15 → index=3 (约20-30帧)
-    //   frameCount < 15  → index=4 (约10-15帧，单帧最大)
-    //   frameCount = 0/不传 → index=1，拉取该视频全部雪碧图（长视频会有多张）
+    // 获取视频帧信息（视频缩略图/雪碧图））
     async getVideoFramesByAID(this: any, aid: string, frameCount?: number, targetFrameSize?: number): Promise<any> {
         // 根据期望帧数计算 API index 参数
         let apiIndex = 1;
@@ -82,13 +266,11 @@ export const BilibiliClientVideoMethods = {
         const cols = data.img_x_len || data.img_cols || 10;
         const rows = data.img_y_len || data.img_rows || 10;
 
-        // data.index 数组长度 = 整个视频全部有效帧总数 + 1（B站 videoshot 约定：
-        // index[0]=0，index[i] 为第 i-1 帧的起始时间，最后一个元素为结束时间）。
-        // 因此实际有效帧数 = index.length - 1，否则会多裁一帧落在雪碧图空白/越界区，
-        // 表现为黑边/缺帧。
+        // data.index 数组长度 = 整个视频全部有效帧总数（跨所有雪碧图）。
+        // 长视频会返回多张 10×10 雪碧图，必须全部下载，否则只能看到前100帧。
         const gridPerImage = cols * rows;
-        const totalValidFrames = data.index && Array.isArray(data.index) && data.index.length > 1
-            ? data.index.length - 1
+        const totalValidFrames = data.index && Array.isArray(data.index)
+            ? data.index.length
             : data.image.length * gridPerImage;
         // 若调用方显式限制帧数（frameCount>0），则裁剪到该数量；0 表示全部
         const limitedFrames = (frameCount && frameCount > 0 && frameCount < totalValidFrames)
@@ -128,12 +310,6 @@ export const BilibiliClientVideoMethods = {
             data.total_frames = limitedFrames;
             data.image_count = data.image.length;
             data.last_image_rows = neededImages > 1 ? lastImageRows : actualRows;
-            // 未缩放：image[] 本身即原始 CDN 基址，同样保留 original* 供播放页逐帧裁切
-            data.originalImages = data.image.slice();
-            data.originalImgX = imgX;
-            data.originalImgY = imgY;
-            data.originalCols = cols;
-            data.originalRows = rows;
             data.frameList = this.buildVideoFrameCropList(data);
             return data;
         }
@@ -173,13 +349,6 @@ export const BilibiliClientVideoMethods = {
             index: data.index
         };
         data.frameList = this.buildVideoFrameCropList(frameSource);
-        // 保留原始雪碧图基址与原始单帧尺寸，供播放页“逐帧按需构造裁切 URL”，
-        // 避免一次性把数百条 frameList 全部常驻内存。
-        data.originalImages = originalImages;
-        data.originalImgX = imgX;
-        data.originalImgY = imgY;
-        data.originalCols = cols;
-        data.originalRows = rows;
         // 注意：同时更新 img_x_size/img_y_size（B站API原始字段名）和 img_x/img_y（自定义字段名）
         // spriteviewer 读取时优先使用 img_x_size，必须同步更新
         data.img_x = targetSize;
@@ -206,54 +375,61 @@ export const BilibiliClientVideoMethods = {
         const cropW = data.img_x_size || data.img_x || 160;
         const cropH = data.img_y_size || data.img_y || 90;
         const framesPerImage = cols * rows;
-        // 实际有效帧数：优先用 total_frames；否则按 index.length - 1 计算
-        // （index 末尾元素是结束时间，不计为帧，否则会多裁一帧黑/缺画面）。
-        let totalFrames: number;
-        if (data.total_frames && data.total_frames > 0) {
-            totalFrames = data.total_frames;
-        } else if (data.index && Array.isArray(data.index) && data.index.length > 1) {
-            totalFrames = data.index.length - 1;
-        } else {
-            totalFrames = data.image.length * framesPerImage;
-        }
+        const totalFrames = data.total_frames
+            || (data.index && Array.isArray(data.index) ? data.index.length : data.image.length * framesPerImage);
         const list: string[] = [];
         for (let i = 0; i < totalFrames; i++) {
-            const url = this.buildVideoFrameCropUrl(data, i, cols, rows, cropW, cropH, framesPerImage);
-            if (url) list.push(url);
+            const spriteIdx = Math.floor(i / framesPerImage);
+            if (spriteIdx >= data.image.length) break;
+            const posInSheet = i % framesPerImage;
+            const col = posInSheet % cols;
+            const row = Math.floor(posInSheet / cols);
+            const x = col * cropW;
+            const y = row * cropH;
+            let baseUrl = data.image[spriteIdx];
+            // 去掉已有的缩放/裁切后缀（@xxx.jpg），还原为 CDN 原图基址
+            const atIdx = baseUrl.indexOf('@');
+            if (atIdx > 0) baseUrl = baseUrl.substring(0, atIdx);
+            if (!baseUrl.endsWith('.jpg')) {
+                const dotIdx = baseUrl.lastIndexOf('.');
+                if (dotIdx > 0) baseUrl = baseUrl.substring(0, dotIdx) + '.jpg';
+            }
+            // B站 videoshot 接口返回的是协议相对地址（//i0.hdslb.com/...），
+            // 手表 <image> 无法识别无协议地址，必须补全 https: 前缀，否则逐帧全黑。
+            if (baseUrl.indexOf('//') === 0) baseUrl = 'https:' + baseUrl;
+            list.push(baseUrl + '@' + x + '-' + y + '-' + cropW + '-' + cropH + 'a.jpg');
         }
         return list;
     },
 
-    // 按帧号即时构造“单帧 CDN 裁切地址”。
-    // 供播放页逐帧调用，避免一次性把所有帧 URL（长视频可达数百条）全部构建并常驻内存。
-    // 返回空串表示帧号越界或无可用雪碧图。
-    buildVideoFrameCropUrl(this: any, data: any, frameIndex: number,
-        cols?: number, rows?: number, cropW?: number, cropH?: number, framesPerImage?: number): string {
+    // 按帧号即时构造单帧 CDN 裁切地址（播放时逐帧调用，避免数百条 URL 常驻内存）。
+    // 坐标算法与 buildVideoFrameCropList 完全一致，区别仅在于只返回第 frameIdx 帧的一条地址。
+    buildVideoFrameCropUrl(this: any, data: any, frameIdx: number): string {
         if (!data || !data.image || data.image.length === 0) return '';
-        const c = cols || (data.img_x_len || data.img_cols || 10);
-        const r = rows || (data.img_y_len || data.img_rows || 10);
-        const w = cropW || (data.img_x_size || data.img_x || 160);
-        const h = cropH || (data.img_y_size || data.img_y || 90);
-        const per = framesPerImage || (c * r);
-        const spriteIdx = Math.floor(frameIndex / per);
+        const cols = data.img_x_len || data.img_cols || 10;
+        const rows = data.img_y_len || data.img_rows || 10;
+        const cropW = data.img_x_size || data.img_x || 160;
+        const cropH = data.img_y_size || data.img_y || 90;
+        const framesPerImage = cols * rows;
+        const totalFrames = data.total_frames
+            || (data.index && Array.isArray(data.index) ? data.index.length : data.image.length * framesPerImage);
+        if (frameIdx < 0 || frameIdx >= totalFrames) return '';
+        const spriteIdx = Math.floor(frameIdx / framesPerImage);
         if (spriteIdx >= data.image.length) return '';
-        const posInSheet = frameIndex % per;
-        const col = posInSheet % c;
-        const row = Math.floor(posInSheet / c);
-        const x = col * w;
-        const y = row * h;
+        const posInSheet = frameIdx % framesPerImage;
+        const col = posInSheet % cols;
+        const row = Math.floor(posInSheet / cols);
+        const x = col * cropW;
+        const y = row * cropH;
         let baseUrl = data.image[spriteIdx];
-        // 去掉已有的缩放/裁切后缀（@xxx.jpg），还原为 CDN 原图基址
         const atIdx = baseUrl.indexOf('@');
         if (atIdx > 0) baseUrl = baseUrl.substring(0, atIdx);
         if (!baseUrl.endsWith('.jpg')) {
             const dotIdx = baseUrl.lastIndexOf('.');
             if (dotIdx > 0) baseUrl = baseUrl.substring(0, dotIdx) + '.jpg';
         }
-        // B站 videoshot 接口返回的是协议相对地址（//i0.hdslb.com/...），
-        // 手表 <image> 无法识别无协议地址，必须补全 https: 前缀，否则逐帧全黑。
         if (baseUrl.indexOf('//') === 0) baseUrl = 'https:' + baseUrl;
-        return baseUrl + '@' + x + '-' + y + '-' + w + '-' + h + 'a.jpg';
+        return baseUrl + '@' + x + '-' + y + '-' + cropW + '-' + cropH + 'a.jpg';
     },
 
     // 获取视频字幕列表

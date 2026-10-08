@@ -1,7 +1,7 @@
 {
     "package": "com.fwzjszd.hyperbilibili.dev",
     "name": "澎湃哔哩",
-    "versionName": "2.5.3",
+    "versionName": "2.5.4",
     "versionCode": 5,
     "minPlatformVersion": 1000,
     "icon": "/common/logoDEV.png",

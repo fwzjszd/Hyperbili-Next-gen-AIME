@@ -9,16 +9,13 @@
       <div class="vc-section" style="margin-top: 20px">
         <div class="setbase" @click="OnSpriteClick()">
           <image class="seticon" src="/common/vidtool_intro.png"></image>
-          <text class="setext_small">雪碧图查看</text>
+          <text class="setext_small">雪碧图播放</text>
           <text class="status-text {{spriteCached ? 'status-cached' : 'status-uncached'}}">{{spriteCached ? '已缓存' : '未缓存'}}</text>
         </div>
 
         <div class="action-row" if="{{spriteCached}}">
           <div class="action-btn action-play" @click="PlaySprite()">
             <text class="action-btn-text">播放</text>
-          </div>
-          <div class="action-btn action-view" @click="OpenSpriteViewer()">
-            <text class="action-btn-text">查看</text>
           </div>
           <div class="action-btn action-delete" @click="DeleteSprite()">
             <text class="action-btn-text action-delete-text">删除</text>
@@ -136,7 +133,11 @@ export default {
     }
   },
   OnSpriteClick() {
-    prompt.showToast({ message: '该功能正在开发中' })
+    if (this.spriteCached && this.cachedSpriteId) {
+      this.PlaySprite()
+    } else {
+      this.DownloadSprite()
+    }
   },
   async DownloadSprite() {
     if (this.downloadingSprite) return
@@ -144,168 +145,73 @@ export default {
     this.showDownloadDialog = true
     this.downloadProgressText = '正在获取雪碧图数据...'
     this.downloadProgressPercent = 3
+    global.logger.log("[videocontent] DownloadSprite start bvid=" + this.bvid + " cid=" + this.cid + " aid=" + this.aid)
 
     const maxRetries = 3
-    // 低画质：单帧120px，用于查看雪碧图（解码内存≈3.2MB，viewer 4MB阈值内）
-    let lowFrameData = null
-    // 高画质：单帧100px，用于逐帧裁切播放（1000×540≈2.16MB，安全低于手表4MB解码上限，避免重启）
-    let highFrameData = null
+    let frameData = null
+    let lastError = ''
 
-    // 同一 aid 的低/高画质只是CDN缩放不同，元数据一致，分别请求以拿到各自URL
+    // 对齐真机验证可行的 WristBili：bvid+cid 裸请求（不带任何 header）
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
-        this.downloadProgressText = '正在获取低画质雪碧图...'
-        lowFrameData = await global.biliclient.getVideoFramesByAID(this.aid, 0, 120)
-        if (lowFrameData && lowFrameData.image && lowFrameData.image.length > 0) break
-        lowFrameData = null
+        this.downloadProgressText = '正在获取雪碧图...'
+        const result = await global.biliclient.getVideoShotByBvidCid(this.bvid, this.cid)
+        if (result && result.ok && result.data && result.data.image && result.data.image.length > 0) {
+          frameData = result.data
+          break
+        }
+        lastError = result && result.error ? result.error : '返回数据为空'
+        frameData = null
       } catch (e) {
-        global.logger.error("[videocontent] getVideoFramesByAID(low) attempt " + (attempt + 1) + " Error: " + e.toString())
+        lastError = '异常: ' + e.toString()
+        global.logger.error("[videocontent] getVideoShotByBvidCid attempt " + (attempt + 1) + " Error: " + e.toString())
       }
       if (attempt < maxRetries - 1) {
         this.downloadProgressText = '获取失败，重试中(' + (attempt + 2) + '/' + maxRetries + ')...'
       }
     }
 
-    if (!lowFrameData || !lowFrameData.image || lowFrameData.image.length === 0) {
+    if (!frameData || !frameData.image || frameData.image.length === 0) {
       this.showDownloadDialog = false
-      prompt.showToast({ message: '该视频没有可用的雪碧图' })
+      prompt.showToast({ message: '雪碧图获取失败: ' + lastError })
       this.downloadingSprite = false
       return
     }
 
-    // 高画质失败不阻断：回退使用低画质URL播放（仅清晰度略低）
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        this.downloadProgressText = '正在获取高画质雪碧图...'
-        highFrameData = await global.biliclient.getVideoFramesByAID(this.aid, 0, 100)
-        if (highFrameData && highFrameData.image && highFrameData.image.length > 0) break
-        highFrameData = null
-      } catch (e) {
-        global.logger.error("[videocontent] getVideoFramesByAID(high) attempt " + (attempt + 1) + " Error: " + e.toString())
-      }
-    }
+    // 用 CDN 服务端裁切地址生成每一帧的在线单帧地址，逐帧下载为本地小图。
+    // 比起下载整张大雪碧图再本地裁切（Vela image 不支持区域裁切），
+    // 单帧下载内存与解码压力最低，播放时只切换 <image> 的本地路径。
+    const frameUrlList = global.biliclient.buildVideoFrameCropList(frameData)
+    const totalThumbs = frameUrlList.length
+    this.downloadCountText = '共' + totalThumbs + '帧'
 
-    // 统计：总帧数（跨所有雪碧图）、雪碧图张数、单张格子数
-    const fCols = lowFrameData.img_x_len || lowFrameData.img_cols || 10
-    const fRows = lowFrameData.img_y_len || lowFrameData.img_rows || 10
-    const perImage = fCols * fRows
-    // 总帧数：B站 videoshot 的 index[] 长度=帧数+1（末尾为结束时间），有效帧=index.length-1
-    const totalThumbs = lowFrameData.total_frames
-      || (lowFrameData.index && Array.isArray(lowFrameData.index) && lowFrameData.index.length > 1
-        ? lowFrameData.index.length - 1
-        : perImage)
-    const sheetCount = lowFrameData.image_count || lowFrameData.image.length
-    this.downloadCountText = '雪碧图' + sheetCount + '张，共' + totalThumbs + '帧'
-
+    const localFrames = []
+    let failedCount = 0
     try {
-      // 下载低画质（查看用）
-      const lowImages = lowFrameData.image
-      const lowLocalImages = []
-      for (let i = 0; i < lowImages.length; i++) {
-        let url = lowImages[i]
-        if (url.startsWith('//')) url = 'https:' + url
-
-        this.downloadProgressText = '下载低画质雪碧图 ' + (i + 1) + '/' + lowImages.length
-        this.downloadProgressPercent = Math.floor(5 + (i / lowImages.length) * 45)
+      for (let i = 0; i < totalThumbs; i++) {
+        const url = frameUrlList[i]
+        this.downloadProgressText = '下载帧 ' + (i + 1) + '/' + totalThumbs
+        this.downloadProgressPercent = Math.floor(5 + (i / totalThumbs) * 90)
 
         let localUri = null
         for (let retry = 0; retry < maxRetries; retry++) {
-          localUri = await this.downloadImage(url, this.bvid + '_sprite_low_' + i + '.jpg')
+          localUri = await this.downloadImage(url, this.bvid + '_frame_' + i + '.jpg')
           if (localUri) break
-          if (retry < maxRetries - 1) {
-            this.downloadProgressText = '低画质图片' + (i + 1) + '下载失败，重试中...'
-          }
         }
         if (localUri) {
-          lowLocalImages.push(localUri)
+          localFrames.push(localUri)
         } else {
-          lowLocalImages.push(url)
+          localFrames.push(url)
+          failedCount++
         }
       }
-      lowFrameData.image = lowLocalImages
 
-      // 下载高画质（逐帧播放用）；若高画质获取失败则复用低画质
-      const useHigh = !!(highFrameData && highFrameData.image && highFrameData.image.length > 0)
-      const highImages = useHigh ? highFrameData.image : lowImages
-      const highLocalImages = []
-      for (let i = 0; i < highImages.length; i++) {
-        let url = highImages[i]
-        if (url.startsWith('//')) url = 'https:' + url
-
-        this.downloadProgressText = (useHigh ? '下载高画质雪碧图 ' : '复用雪碧图 ') + (i + 1) + '/' + highImages.length
-        this.downloadProgressPercent = Math.floor(50 + (i / highImages.length) * 40)
-
-        // 高画质失败/复用场景下，直接用已下载的低画质本地文件
-        if (!useHigh) {
-          highLocalImages.push(lowLocalImages[i] || url)
-          continue
-        }
-
-        let localUri = null
-        for (let retry = 0; retry < maxRetries; retry++) {
-          localUri = await this.downloadImage(url, this.bvid + '_sprite_high_' + i + '.jpg')
-          if (localUri) break
-          if (retry < maxRetries - 1) {
-            this.downloadProgressText = '高画质图片' + (i + 1) + '下载失败，重试中...'
-          }
-        }
-        if (localUri) {
-          highLocalImages.push(localUri)
-        } else {
-          // 高画质单张下载失败，回退对应低画质本地文件
-          highLocalImages.push(lowLocalImages[i] || url)
-        }
-      }
-      if (useHigh) {
-        highFrameData.image = highLocalImages
-      } else {
-        // 复用低画质帧数据结构（含本地URL）
-        highFrameData = JSON.parse(JSON.stringify(lowFrameData))
-        highFrameData.image = highLocalImages
-      }
-
-      // 逐帧在线裁切必须使用【原始 CDN 基址 + 原始单帧尺寸】（160×90）。
-      // 此时 lowFrameData.image 已被替换为本地路径（且低画质可能是 120 宽），
-      // 故用 getVideoFramesByAID 预先保留的 originalImages/original* 字段，
-      // 同时写入低/高画质缓存，确保播放页逐帧裁切坐标正确，不出现黑边/缺帧。
-      const originalCropSource = {
-        originalImages: lowFrameData.originalImages || [],
-        originalImgX: lowFrameData.originalImgX || lowFrameData.img_x_size || 160,
-        originalImgY: lowFrameData.originalImgY || lowFrameData.img_y_size || 90,
-        originalCols: lowFrameData.originalCols || fCols,
-        originalRows: lowFrameData.originalRows || fRows
-      }
-      lowFrameData.originalImages = originalCropSource.originalImages
-      lowFrameData.originalImgX = originalCropSource.originalImgX
-      lowFrameData.originalImgY = originalCropSource.originalImgY
-      lowFrameData.originalCols = originalCropSource.originalCols
-      lowFrameData.originalRows = originalCropSource.originalRows
-      highFrameData.originalImages = originalCropSource.originalImages
-      highFrameData.originalImgX = originalCropSource.originalImgX
-      highFrameData.originalImgY = originalCropSource.originalImgY
-      highFrameData.originalCols = originalCropSource.originalCols
-      highFrameData.originalRows = originalCropSource.originalRows
-      // 逐帧列表兜底（同样基于原始在线地址）
-      if (originalCropSource.originalImages.length > 0) {
-        const cropSource = {
-          image: originalCropSource.originalImages,
-          img_x_size: originalCropSource.originalImgX,
-          img_y_size: originalCropSource.originalImgY,
-          img_x_len: originalCropSource.originalCols,
-          img_y_len: originalCropSource.originalRows,
-          total_frames: totalThumbs,
-          index: lowFrameData.index
-        }
-        lowFrameData.frameList = global.biliclient.buildVideoFrameCropList(cropSource)
-        highFrameData.frameList = lowFrameData.frameList
-      }
-
-      // 缓存结构：frameData=低画质(查看)，hdFrameData=高画质(逐帧播放)
-      // frameCount = 跨所有雪碧图的总帧数，供播放页滑动/逐帧使用，长视频可超过100帧
+      // 轻量缓存：只存本地帧路径 + 帧数（不含整张雪碧图与双份冗余），
+      // 播放页读取后逐张切本地图，JSON 体积极小，不会再因解析大缓存而重启
       const spriteJson = JSON.stringify({
-        frameData: lowFrameData,
-        hdFrameData: highFrameData,
-        frameCount: totalThumbs
+        frames: localFrames,
+        frameCount: localFrames.length,
+        failedCount: failedCount
       })
 
       this.downloadProgressText = '正在保存缓存...'
@@ -321,7 +227,7 @@ export default {
       this.spriteCached = true
       this.downloadProgressPercent = 100
       this.showDownloadDialog = false
-      prompt.showToast({ message: '雪碧图缓存成功' })
+      prompt.showToast({ message: failedCount > 0 ? '部分帧下载失败' : '雪碧图缓存成功' })
     } catch (e) {
       global.logger.error("[videocontent] DownloadSprite Error: " + e.toString())
       this.showDownloadDialog = false
@@ -329,18 +235,22 @@ export default {
     }
     this.downloadingSprite = false
   },
-  OpenSpriteViewer() {
-    router.push({
-      uri: "pages/video/spriteviewer",
+  // 雪碧图逐帧播放：读取已下载到本地的帧路径逐张播放（手环内存有限，不附带音频）
+  PlaySprite() {
+    if (!this.cachedSpriteId) {
+      prompt.showToast({ message: '请先下载雪碧图' })
+      return
+    }
+    router.replace({
+      uri: "pages/video/spriteplayer",
       params: {
         title: this.title,
-        cachedSpriteId: this.cachedSpriteId
+        cachedSpriteId: this.cachedSpriteId,
+        cid: this.cid,
+        aid: this.aid,
+        bvid: this.bvid
       }
     })
-  },
-  // 雪碧图逐帧播放：跳转播放器（手环内存有限，不附带音频，降低崩溃风险）
-  PlaySprite() {
-    prompt.showToast({ message: '该功能正在开发中' })
   },
   async DeleteSprite() {
     if (!this.cachedSpriteId) return

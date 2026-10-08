@@ -1,7 +1,7 @@
 import { storage, router } from '../../tsimports';
 import { AccountData } from './accountData';
 
-// 登录相关的方法
+// 登录相关的方法（回溯至 v2.1 的可靠实现）
 export const BilibiliClientLoginMethods = {
     // 更新账号信息
     async updateAccountInfo(this: any): Promise<boolean> {
@@ -46,25 +46,24 @@ export const BilibiliClientLoginMethods = {
             this.dedeUserID = accountData.dedeUserID;
             this.sid = accountData.sid;
             global.logger.log('使用存储的账号数据登录成功');
-            global.logger.log('拉账号信息')
             await this.updateAccountInfo();
-            global.logger.log('拉buvid')
             await this.updateBUVID();
-
             return { success: true, message: "登录成功" };
         } else if (send_req) {
-            const response = await this.getRequest(`https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=${this.qrCodeKey}`);
-            if (response && response.data && response.data.data.code === 0) {
-                if (interval) clearInterval(interval);
+            const response = await this.getRequest(`https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=${this.qrCodeKey}`)
 
-                this.extractCookiesFromResponse(response.headers['Set-Cookie']);
-                await this.storeAccountData();
-                global.logger.log('使用二维码登录并存储账号数据成功');
-                await this.updateAccountInfo();
-                await this.updateBUVID();
-                return { success: true, message: "登录成功" };
+            if (response && response.data && response.data.data.code === 0) {
+                if (interval) clearInterval(interval)
+
+                this.extractCookiesFromResponse(response.headers['Set-Cookie'])
+
+                await this.storeAccountData()
+                global.logger.log('使用二维码登录并存储账号数据成功')
+                await this.updateAccountInfo()
+                await this.updateBUVID()
+                return { success: true, message: "登录成功" }
             } else {
-                return { success: false, message: "等待用户操作..." };
+                return { success: false, message: "等待用户操作..." }
             }
         }
     },
@@ -77,21 +76,20 @@ export const BilibiliClientLoginMethods = {
     // 从响应头中提取Cookies
     extractCookiesFromResponse(this: any, setCookieHeaders: string | string[]) {
         if (typeof setCookieHeaders === 'string') {
-            setCookieHeaders = setCookieHeaders.split(', ');
+            setCookieHeaders = setCookieHeaders.split(', ')
         }
-
-        setCookieHeaders.forEach(cookie => {
-            if (cookie.includes('SESSDATA')) this.sessData = this.parseCookie(cookie, 'SESSDATA');
-            else if (cookie.includes('bili_jct')) this.biliJct = this.parseCookie(cookie, 'bili_jct');
-            else if (cookie.includes('DedeUserID') && !cookie.includes('DedeUserID__ckMd5')) this.dedeUserID = this.parseCookie(cookie, 'DedeUserID');
-            else if (cookie.includes('sid')) this.sid = this.parseCookie(cookie, 'sid');
-        });
+        setCookieHeaders.forEach((cookie: string) => {
+            if (cookie.includes('SESSDATA')) this.sessData = this.parseCookie(cookie, 'SESSDATA')
+            else if (cookie.includes('bili_jct')) this.biliJct = this.parseCookie(cookie, 'bili_jct')
+            else if (cookie.includes('DedeUserID') && !cookie.includes('DedeUserID__ckMd5')) this.dedeUserID = this.parseCookie(cookie, 'DedeUserID')
+            else if (cookie.includes('sid')) this.sid = this.parseCookie(cookie, 'sid')
+        })
     },
 
     // 辅助函数，用于解析cookie字符串
     parseCookie(this: any, cookie: string, name: string): string | null {
-        const match = cookie.match(new RegExp(`${name}=([^;]+)`));
-        return match ? match[1] : null;
+        const match = cookie.match(new RegExp(`${name}=([^;]+)`))
+        return match ? match[1] : null
     },
 
     // 获取本地存储的账号数据
@@ -113,21 +111,21 @@ export const BilibiliClientLoginMethods = {
     // 保存账号数据到本地存储
     async storeAccountData(this: any): Promise<void> {
         if (this.sessData && this.biliJct && this.dedeUserID && this.sid) {
-            const accountData: AccountData = { sessData: this.sessData, biliJct: this.biliJct, dedeUserID: this.dedeUserID, sid: this.sid };
+            const accountData: AccountData = { sessData: this.sessData, biliJct: this.biliJct, dedeUserID: this.dedeUserID, sid: this.sid }
             return new Promise((resolve, reject) => {
                 storage.set({
                     key: 'bilibili_account',
                     value: JSON.stringify(accountData),
                     success: () => {
-                        global.logger.log('账号数据存储成功');
-                        resolve();
+                        global.logger.log('账号数据存储成功')
+                        resolve()
                     },
                     fail: (data: any, code: number) => {
-                        global.logger.log(`存储账号数据失败，错误码 = ${code}`);
-                        reject();
+                        global.logger.log(`存储账号数据失败，错误码 = ${code}`)
+                        reject()
                     }
-                });
-            });
+                })
+            })
         }
     }
 };

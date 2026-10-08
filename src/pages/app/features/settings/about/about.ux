@@ -38,6 +38,9 @@
         <div class="developer" style="margin-top: 10px">
           <text class="text devname">@B4QAQ</text>
         </div>
+        <div class="developer" style="margin-top: 10px">
+          <text class="text devname">@Velvetine</text>
+        </div>
         <text class="text devrole">特别鸣谢</text>
       </div>
       <text class="text gr" style="margin-top: 30px">{{ $t("about.developers") }}</text>
